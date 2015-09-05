@@ -33,7 +33,7 @@
 #define WIREPLUS_TWCR_CLEAR           _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
 #define WIREPLUS_TWCR_SEND            _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
 #define WIREPLUS_TWCR_STOP            _BV(TWINT) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTO);
-#define WIREPLUS_TWCR_RELEASE         _BV(TWINT) | _BV(TWEN)
+#define WIREPLUS_TWCR_RELEASE         _BV(TWEN)
 /*******************| Type definitions |*******************************/
 
 typedef uint8_t WirePlus_BufferIndex_t;
@@ -61,6 +61,7 @@ typedef struct
 } WirePlus_RingBuffer_t;
 
 /* Some function like macro to make code more readable */
+#define WirePlus_incrementIndex(a)          a = (a + 1) % WIREPLUS_RINGBUFFER_SIZE
 #define WirePlus_RingBufferFull(x)          (x.lastOperation == WIREPLUS_LASTOPERATION_WRITE && (x.head == x.tail))
 #define WirePlus_RingBufferEmpty(x)         (x.lastOperation == WIREPLUS_LASTOPERATION_READ && (x.head == x.tail))
 
@@ -80,6 +81,10 @@ public:
   void beginTransmission(uint8_t address);
   void write(uint8_t data);
   void endTransmission();
+  void beginReception();
+  void read(uint8_t *data);
+  void endReception();
+  uint8_t requestFrom(uint8_t address, uint8_t numberOfBytes);
 
 };
 

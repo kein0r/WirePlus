@@ -1,7 +1,13 @@
 /** @ingroup WirePlus
  * @{
  *
- * @brief 
+ * @brief Replacement library for Arduino Wire library.
+ * Every fuction which request a specific bus state (START, RE-START, STOP) is blocking
+ * and can therefore used to sync application with two wire bus.
+ *
+ * TODO:
+ * - Complete error handling
+ * - lastStatus (NACK, etc. etc.)
  */
 
 /*******************| Inclusions |*************************************/
@@ -12,7 +18,6 @@
 
 
 /*******************| Macros |*****************************************/
-#define WirePlus_incrementIndex(a)         a = (a + 1) % WIREPLUS_RINGBUFFER_SIZE
 
 /*******************| Type definitions |*******************************/
 
@@ -59,17 +64,19 @@ WirePlus::WirePlus(void)
  * Adress byte will be writen to ringBuffer and (repeated) start is requested.
  * @param address 7bit slave address. Adress will autmatically be left shifted by one
  * and write bit added.
- * @note This function is blocking in case no space left in buffer. Do not call in 
- * interrupt context.
+ * @note This function is blocking! It will wait until all previous communication has
+ * finished. The reason is because this function is also used to generate a restart for
+ * reading from two wire slave device. Do not call in interrupt context.
  */
 void WirePlus::beginTransmission(uint8_t address)
 {
   /* Left shift address and add write bit */
   address = (address << 1) | TW_WRITE;
 
+  /* wait until all previous communication has finished */
+  while ( ! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
+  
   /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
-  /* wait in case no space left in buffer */
-  while ( WirePlus_RingBufferFull(WirePlus_txRingBuffer) ) ;
   /* Place data in buffer */
   WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.head] = address;
   WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
@@ -91,8 +98,9 @@ void WirePlus::write(const uint8_t data)
   /* In case buffer is empty (i.e. first byte to write), copy data directly to TWDR and ask for sent */
   if ( WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
   {
-    /* need to increment first as the interrupt could happen directly after writing TWDR */
+    /* Buffer is empty so last one must be a read */
     WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ;
+    /* need to increment first as the interrupt could happen directly after writing TWDR */
     TWDR = data;
     TWCR = WIREPLUS_TWCR_SEND;
   }
@@ -127,7 +135,34 @@ void WirePlus::endTransmission()
   while(TWCR & _BV(TWSTO)) ;
 }
 
+void WirePlus::beginReception()
+{
+}
+
+void WirePlus::read(uint8_t *data)
+{
+}
+
+void WirePlus::endReception()
+{
+}
+
+/**
+ * Reads #numberOfBytes from #address
+ * @param address Slave device address to read from
+ * @param numberOfBytes Number of bytes to read from slave device
+ * @note This function mainly exists for compatibility reason with original Wire
+ * library. In contrast to the original function, this function will always sent
+ * start. 
+ * @note This function is blocking. Don't call in interrupt context.
+ */
+uint8_t WirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
+{
+
+}
+
 uint8_t twiStatus = 0x0;
+uint8_t numBytesSend = 0x00;
 uint8_t lastByteTransmitted = 0x00;
 
 /**
@@ -138,8 +173,9 @@ uint8_t lastByteTransmitted = 0x00;
  * @note Writing a one to TWCR actually clears the corresponding bit
  */
 ISR(TWI_vect)
-{ 
-  twiStatus = TW_STATUS;
+{
+  PORTB = TW_STATUS>>2;
+  digitalWrite(4, HIGH);
   /* See why exactly interrupt was triggered */
   switch(TW_STATUS)
   {
@@ -148,21 +184,19 @@ ISR(TWI_vect)
     case TW_START:
     case TW_REP_START:
     case TW_MT_SLA_ACK:
-    case TW_MT_SLA_NACK: /* TODO: remove */
+    case TW_MT_SLA_NACK:  /* TODO: remove */
     case TW_MT_DATA_NACK: /* TODO: remove */
     case TW_MT_DATA_ACK:
       /* Process next byte in queue if there is one */
       if (! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
       {
         lastByteTransmitted = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
+        numBytesSend++;
         TWDR = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
         WirePlus_incrementIndex(WirePlus_txRingBuffer.tail);
         WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ;
         TWCR = WIREPLUS_TWCR_CLEAR;
-      }
-      else if (WirePlus_sendStop) { /* last byte transmitted. Do we need to sent stop ? */
-        TWCR = WIREPLUS_TWCR_STOP;
-        WirePlus_sendStop = false;
+        twiStatus = TW_STATUS;
       }
       else /* nothing else to do. Just clear interrupt and wait for more data or stop */
       {
@@ -174,13 +208,15 @@ ISR(TWI_vect)
       TWCR = WIREPLUS_TWCR_CLEAR;
     break;
   }
+  digitalWrite(4, LOW);
 }
 
 void printStatus()
 {
   Serial.print("TW Status 0x"); Serial.print(twiStatus, HEX);
-  Serial.println();
-  Serial.print("Last Byte 0x"); Serial.print(lastByteTransmitted, HEX);
+  Serial.print("  # Bytes: "); Serial.print(numBytesSend);
+  Serial.print("  Tx head 0x"); Serial.print(WirePlus_txRingBuffer.head, HEX);
+  Serial.print("  Tx tail 0x"); Serial.print(WirePlus_txRingBuffer.tail, HEX); 
   Serial.println();
 }
 /** @}*/
