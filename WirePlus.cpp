@@ -3,19 +3,18 @@
  *
  * @brief Replacement library for Arduino Wire library.
  * Every fuction which request a specific bus state (START, RE-START, STOP) is blocking
- * and can therefore used to sync application with two wire bus.
+ * and can therefore be used to sync application with two wire bus.
  *
  * TODO:
  * - Complete error handling
  * - lastStatus (NACK, etc. etc.)
+ * - Timeout handling
  */
 
 /*******************| Inclusions |*************************************/
 #include "WirePlus.h"
 #include <Arduino.h>
 #include <compat/twi.h>
-
-
 
 /*******************| Macros |*****************************************/
 
@@ -122,14 +121,33 @@ void WirePlus::write(const uint8_t data)
  */
 void WirePlus::endTransmission()
 {
+  uint8_t test = 0;
   /* block until last byte was transferred (or better ACK for last byte was received*/
   while(!WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
   /* Then request STOP */
   TWCR = WIREPLUS_TWCR_STOP;
 }
 
-void WirePlus::beginReception()
+/**
+ *
+ */
+void WirePlus::beginReception(uint8_t address)
 {
+    /* Left shift address and add write bit */
+  address = (address << 1) | TW_READ;
+
+  /* wait until all previous communication has finished */
+  while ( ! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
+  
+  /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
+  /* Place data in buffer */
+  WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.head] = address;
+  WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
+  WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+
+  /* Request start signal */
+  TWCR = WIREPLUS_TWCR_START;
+
 }
 
 void WirePlus::read(uint8_t *data)
@@ -175,7 +193,9 @@ ISR(TWI_vect)
     /* Slave adress is just one of the bytes which is transefered. Thus, we will just sent one
      * byte after each other after START, RE_START, ACK from the ring buffer. */
     case TW_MT_SLA_ACK:
+    case TW_MR_SLA_ACK:
     case TW_MT_SLA_NACK:  /* TODO: remove */
+    case TW_MR_SLA_NACK:  /* TODO: remove */
     case TW_MT_DATA_NACK: /* TODO: remove */
     case TW_MT_DATA_ACK:
       /* If ACK was received we've sent something earlier and therefore need to move read pointer */
@@ -197,6 +217,11 @@ ISR(TWI_vect)
       {
         TWCR = WIREPLUS_TWCR_RELEASE;
       }
+      break;
+    case TW_MR_DATA_ACK:
+    case TW_MR_DATA_NACK:  /* TODO: remove */
+      /* change */
+      TWCR = WIREPLUS_TWCR_CLEAR;
       break;
     default:
       /* If something is not handled above clear at least INT and go on */

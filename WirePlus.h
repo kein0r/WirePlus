@@ -81,7 +81,7 @@ public:
   void beginTransmission(uint8_t address);
   void write(uint8_t data);
   void endTransmission();
-  void beginReception();
+  void beginReception(uint8_t address);
   void read(uint8_t *data);
   void endReception();
   uint8_t requestFrom(uint8_t address, uint8_t numberOfBytes);
