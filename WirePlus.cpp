@@ -24,7 +24,6 @@
 /*******************| Global variables |*******************************/
 static WirePlus_RingBuffer_t WirePlus_txRingBuffer;
 static WirePlus_RingBuffer_t WirePlus_rxRingBuffer;
-static bool WirePlus_sendStop = false;
 
 /*******************| Function Definition |****************************/
 
@@ -98,9 +97,9 @@ void WirePlus::write(const uint8_t data)
   /* In case buffer is empty (i.e. first byte to write), copy data directly to TWDR and ask for sent */
   if ( WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
   {
-    /* Buffer is empty so last one must be a read */
-    WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ;
     /* need to increment first as the interrupt could happen directly after writing TWDR */
+    WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+    WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
     TWDR = data;
     TWCR = WIREPLUS_TWCR_SEND;
   }
@@ -123,16 +122,10 @@ void WirePlus::write(const uint8_t data)
  */
 void WirePlus::endTransmission()
 {
-  /* if tx buffer is empty, all bytes are transmitted, request stop */
-  if (WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
-  {
-    TWCR = WIREPLUS_TWCR_STOP;
-  }
-  else {   /* if still transmitting just remember to sent stop later */
-    WirePlus_sendStop = true;
-  }
-  /* Block until STOP was transmitted successfully */
-  while(TWCR & _BV(TWSTO)) ;
+  /* block until last byte was transferred (or better ACK for last byte was received*/
+  while(!WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
+  /* Then request STOP */
+  TWCR = WIREPLUS_TWCR_STOP;
 }
 
 void WirePlus::beginReception()
@@ -181,20 +174,22 @@ ISR(TWI_vect)
   {
     /* Slave adress is just one of the bytes which is transefered. Thus, we will just sent one
      * byte after each other after START, RE_START, ACK from the ring buffer. */
-    case TW_START:
-    case TW_REP_START:
     case TW_MT_SLA_ACK:
     case TW_MT_SLA_NACK:  /* TODO: remove */
     case TW_MT_DATA_NACK: /* TODO: remove */
     case TW_MT_DATA_ACK:
+      /* If ACK was received we've sent something earlier and therefore need to move read pointer */
+      WirePlus_incrementIndex(WirePlus_txRingBuffer.tail);
+      WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ;
+      /* fall through */
+    case TW_START:
+    case TW_REP_START:
       /* Process next byte in queue if there is one */
       if (! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
       {
         lastByteTransmitted = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
         numBytesSend++;
         TWDR = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
-        WirePlus_incrementIndex(WirePlus_txRingBuffer.tail);
-        WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ;
         TWCR = WIREPLUS_TWCR_CLEAR;
         twiStatus = TW_STATUS;
       }
