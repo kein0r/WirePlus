@@ -63,8 +63,7 @@ WirePlus::WirePlus(void)
  * @param address 7bit slave address. Adress will autmatically be left shifted by one
  * and write bit added.
  * @note This function is blocking! It will wait until all previous communication has
- * finished. The reason is because this function is also used to generate a restart for
- * reading from two wire slave device. Do not call in interrupt context.
+ * finished. Do not call in interrupt context.
  */
 void WirePlus::beginTransmission(uint8_t address)
 {
@@ -114,8 +113,8 @@ void WirePlus::write(const uint8_t data)
 }
 
 /**
- * End two wire transmission bei either requesting to send a stop when buffer
- * was completely transmitted or, if buffer is already empty, requesting a stop
+ * End two wire transmission by requesting to send a stop after buffer was completely
+ * transmitted.
  * @note This function will block until stop was really sent. It can therefore be
  * used as a synchronization point
  */
@@ -129,7 +128,12 @@ void WirePlus::endTransmission()
 }
 
 /**
- *
+ * Function to initiate a read from two wire slave device. Two wire start will be sent followed
+ * by address include read bit
+ * @param address 7bit slave address. Adress will autmatically be left shifted by one
+ * and read bit added.
+ * @note This function is blocking! It will wait until all previous communication has
+ * finished. Do not call in interrupt context.
  */
 void WirePlus::beginReception(uint8_t address)
 {
