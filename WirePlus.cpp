@@ -7,8 +7,10 @@
  *
  * TODO:
  * - Complete error handling
+ * - Add lastState to return value for endTransmission, requestFrom and endReception 
  * - lastStatus (NACK, etc. etc.)
  * - Timeout handling
+ * - Think about where to add interrupt locking
  */
 
 /*******************| Inclusions |*************************************/
@@ -23,6 +25,12 @@
 /*******************| Global variables |*******************************/
 static WirePlus_RingBuffer_t WirePlus_txRingBuffer;
 static WirePlus_RingBuffer_t WirePlus_rxRingBuffer;
+static WirePlus_Status_t status = WirePlus_Init;
+/**
+ * Number of bytes requested to be received via two wire interface. In case of NACK received
+ * this variable will be set to 0. Thus, #status must always be checked if this variable is used.
+ */
+static uint8_t bytesToReceive = 0;
 
 /*******************| Function Definition |****************************/
 
@@ -89,6 +97,7 @@ void WirePlus::beginTransmission(uint8_t address)
  * @note This function is blocking! If head would move to the same location as the
  * tail the buffer would overflow. Do not call in interrupt context.
  * @param data data to be written
+ * @pre #beginTransmission was called
  */
 void WirePlus::write(const uint8_t data)
 {
@@ -117,10 +126,10 @@ void WirePlus::write(const uint8_t data)
  * transmitted.
  * @note This function will block until stop was really sent. It can therefore be
  * used as a synchronization point
+ * @pre #beginTransmission was called
  */
 void WirePlus::endTransmission()
 {
-  uint8_t test = 0;
   /* block until last byte was transferred (or better ACK for last byte was received*/
   while(!WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
   /* Then request STOP */
@@ -140,8 +149,8 @@ void WirePlus::beginReception(uint8_t address)
     /* Left shift address and add write bit */
   address = (address << 1) | TW_READ;
 
-  /* wait until all previous communication has finished */
-  while ( ! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
+  /* wait until all previous communication (rx and tx) has finished */
+  while ( ! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer)) ;
   
   /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
   /* Place data in buffer */
@@ -151,16 +160,8 @@ void WirePlus::beginReception(uint8_t address)
 
   /* Request start signal */
   TWCR = WIREPLUS_TWCR_START;
-
 }
 
-void WirePlus::read(uint8_t *data)
-{
-}
-
-void WirePlus::endReception()
-{
-}
 
 /**
  * Reads #numberOfBytes from #address
@@ -173,10 +174,68 @@ void WirePlus::endReception()
  */
 uint8_t WirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
 {
-
+  beginReception(address);
+  bytesToReceive += numberOfBytes;
+  endReception();
 }
 
-uint8_t twiStatus = 0x0;
+bool WirePlus::available()
+{
+  return !WirePlus_RingBufferEmpty(WirePlus_rxRingBuffer);
+}
+
+/**
+ * Asks for #length bytes from two wire bus. This function can be called several times
+ * to consecutively receive more bytes without sending a stop in between.
+ * 
+ * @param data Pointer to buffer where to the data received from two wire slave device will
+ * be copied. Application must make sure that buffer is big enough to hold data completely
+ * @param length Number of bytes to receive from two wire bus
+ * @pre #beginReception was called
+ */
+uint8_t WirePlus::read( )
+{
+  if(! WirePlus_RingBufferEmpty(WirePlus_rxRingBuffer) )
+  {
+    uint8_t retVal = WirePlus_rxRingBuffer.buffer[WirePlus_rxRingBuffer.tail];;
+    WirePlus_incrementIndex(WirePlus_rxRingBuffer.tail);
+    return retVal;
+  }
+  else {
+    return 0x00;
+  }
+}
+
+
+void WirePlus::endReception()
+{
+  /* Wait until data is completely (or NACK) received */
+  while (bytesToReceive) ;
+  /* Then request STOP */
+  TWCR = WIREPLUS_TWCR_STOP;
+}
+
+/**
+ * Returns number of bytes requested to be received via two wire interface. In case of NACK received
+ * return value will be 0 and two wire status must be checked in addition.
+ * @return Number of bytes still requested to be received by two wire interface or zero if NACK was
+ * received from two wire slave device (status equals to WirePlus_MasterReceiver_NACK).
+ */
+uint8_t WirePlus::BytesToBeReceived()
+{
+  return bytesToReceive;
+}
+
+/**
+ * Provides access to last status of two wire interface
+ * @return Last status of two wire interface
+ */
+WirePlus_Status_t WirePlus::getStatus()
+{
+  return status;
+}
+
+
 uint8_t numBytesSend = 0x00;
 uint8_t lastByteTransmitted = 0x00;
 
@@ -215,7 +274,6 @@ ISR(TWI_vect)
         numBytesSend++;
         TWDR = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
         TWCR = WIREPLUS_TWCR_CLEAR;
-        twiStatus = TW_STATUS;
       }
       else /* nothing else to do. Just clear interrupt and wait for more data or stop */
       {
@@ -223,9 +281,27 @@ ISR(TWI_vect)
       }
       break;
     case TW_MR_DATA_ACK:
-    case TW_MR_DATA_NACK:  /* TODO: remove */
-      /* change */
-      TWCR = WIREPLUS_TWCR_CLEAR;
+    case TW_MR_DATA_NACK:
+      /* No check for buffer override done because this would block the complete system */
+      if (bytesToReceive)
+      {
+        /* Place data in buffer */
+        WirePlus_rxRingBuffer.buffer[WirePlus_rxRingBuffer.head] = TWDR;
+        WirePlus_incrementIndex(WirePlus_rxRingBuffer.head);
+        WirePlus_rxRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+        bytesToReceive--;
+      }
+      /* Is there more than one byte to be received left after this one */
+      if (bytesToReceive > 1)
+      {
+        /* If yes, send ACK */
+        TWCR = WIREPLUS_TWCR_ACK;
+      }
+      else
+      {
+        /* Send NACkK for last byte (and all following one) to stop reception */
+        TWCR = WIREPLUS_TWCR_NACK;
+       }
       break;
     default:
       /* If something is not handled above clear at least INT and go on */
@@ -237,7 +313,6 @@ ISR(TWI_vect)
 
 void printStatus()
 {
-  Serial.print("TW Status 0x"); Serial.print(twiStatus, HEX);
   Serial.print("  # Bytes: "); Serial.print(numBytesSend);
   Serial.print("  Tx head 0x"); Serial.print(WirePlus_txRingBuffer.head, HEX);
   Serial.print("  Tx tail 0x"); Serial.print(WirePlus_txRingBuffer.tail, HEX); 

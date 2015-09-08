@@ -29,11 +29,13 @@
  * TWEN: TWI Enable Bit
  * TWIE: TWI Interrupt Enable
  */
-#define WIREPLUS_TWCR_START           _BV(TWINT) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_CLEAR           _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_SEND            _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_STOP            _BV(TWINT) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTO);
-#define WIREPLUS_TWCR_RELEASE         _BV(TWEN)
+#define WIREPLUS_TWCR_START           _BV(TWINT) | _BV(TWEA) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE)
+#define WIREPLUS_TWCR_CLEAR           _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
+#define WIREPLUS_TWCR_SEND            _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
+#define WIREPLUS_TWCR_STOP            _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTO);
+#define WIREPLUS_TWCR_ACK             _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
+#define WIREPLUS_TWCR_NACK            _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
+#define WIREPLUS_TWCR_RELEASE         _BV(TWEA) | _BV(TWEN)
 /*******************| Type definitions |*******************************/
 
 typedef uint8_t WirePlus_BufferIndex_t;
@@ -65,6 +67,12 @@ typedef struct
 #define WirePlus_RingBufferFull(x)          (x.lastOperation == WIREPLUS_LASTOPERATION_WRITE && (x.head == x.tail))
 #define WirePlus_RingBufferEmpty(x)         (x.lastOperation == WIREPLUS_LASTOPERATION_READ && (x.head == x.tail))
 
+typedef enum {
+  WirePlus_Init,
+  WirePlus_MasterSender_NACK,
+  WirePlus_MasterReceiver_NACK,
+} WirePlus_Status_t;
+
 
 /*******************| Global variables |*******************************/
 
@@ -82,10 +90,13 @@ public:
   void write(uint8_t data);
   void endTransmission();
   void beginReception(uint8_t address);
-  void read(uint8_t *data);
-  void endReception();
   uint8_t requestFrom(uint8_t address, uint8_t numberOfBytes);
-
+  bool available();
+  uint8_t read();
+  uint8_t BytesToBeReceived();
+  void endReception();
+  WirePlus_Status_t getStatus();
+  
 };
 
 #endif
