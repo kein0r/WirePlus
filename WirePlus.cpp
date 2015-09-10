@@ -209,8 +209,10 @@ uint8_t WirePlus::read( )
 
 void WirePlus::endReception()
 {
+  uint8_t test = 0;
   /* Wait until data is completely (or NACK) received */
-  while (bytesToReceive) ;
+  
+  while (bytesToReceive) {digitalWrite(4, test); test = ~test; };
   /* Then request STOP */
   TWCR = WIREPLUS_TWCR_STOP;
 }
@@ -274,6 +276,17 @@ ISR(TWI_vect)
         numBytesSend++;
         TWDR = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
         TWCR = WIREPLUS_TWCR_CLEAR;
+      }
+      else if (bytesToReceive) /* Nothing more to send but something to receive */
+      {
+        if (bytesToReceive == 1) /* Just one byte to receive so we need to directly send NACK */
+        {
+          TWCR = WIREPLUS_TWCR_NACK;
+        }
+        else 
+        {
+          TWCR = WIREPLUS_TWCR_CLEAR;
+        }
       }
       else /* nothing else to do. Just clear interrupt and wait for more data or stop */
       {
