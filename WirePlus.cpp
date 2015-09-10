@@ -7,10 +7,11 @@
  *
  * TODO:
  * - Complete error handling
- * - Add lastState to return value for endTransmission, requestFrom and endReception 
+ * - Add lastState to return value for endTransmission, 3 and endReception 
  * - lastStatus (NACK, etc. etc.)
  * - Timeout handling
  * - Think about where to add interrupt locking
+ * - Add "whait until STOP was send to endX
  */
 
 /*******************| Inclusions |*************************************/
@@ -30,7 +31,7 @@ static WirePlus_Status_t status = WirePlus_Init;
  * Number of bytes requested to be received via two wire interface. In case of NACK received
  * this variable will be set to 0. Thus, #status must always be checked if this variable is used.
  */
-static uint8_t bytesToReceive = 0;
+static volatile uint8_t bytesToReceive = 0;
 
 /*******************| Function Definition |****************************/
 
@@ -175,6 +176,7 @@ void WirePlus::beginReception(uint8_t address)
 uint8_t WirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
 {
   beginReception(address);
+  /* bytesToReceive shall only be increased after call to beginReception to make sure all Tx is completed */
   bytesToReceive += numberOfBytes;
   endReception();
 }
@@ -209,8 +211,8 @@ uint8_t WirePlus::read( )
 
 void WirePlus::endReception()
 {
-  /* Wait until data is completely (or NACK) received */  
-  while (bytesToReceive) {};
+  /* Wait until data is completely (or NACK) received */
+  while (bytesToReceive) ;
   /* Then request STOP */
   TWCR = WIREPLUS_TWCR_STOP;
 }
@@ -291,9 +293,9 @@ ISR(TWI_vect)
         TWCR = WIREPLUS_TWCR_RELEASE;
       }
       break;
-    case TW_MR_DATA_ACK:
     case TW_MR_DATA_NACK:
-      /* No check for buffer override done because this would block the complete system */
+    case TW_MR_DATA_ACK:
+      /* No check for buffer override done here because this would block the complete system */
       if (bytesToReceive)
       {
         /* Place data in buffer */
@@ -308,11 +310,15 @@ ISR(TWI_vect)
         /* If yes, send ACK */
         TWCR = WIREPLUS_TWCR_ACK;
       }
-      else
+      else if (bytesToReceive == 1)
       {
-        /* Send NACkK for last byte (and all following one) to stop reception */
+        /* Send NACK for last byte (and all following one) to stop reception */
         TWCR = WIREPLUS_TWCR_NACK;
-       }
+      }
+      else /* nothing else to do. Just clear interrupt and wait for more data or stop */
+      {
+        TWCR = WIREPLUS_TWCR_RELEASE;
+      }
       break;
     default:
       /* If something is not handled above clear at least INT and go on */
@@ -324,9 +330,10 @@ ISR(TWI_vect)
 
 void printStatus()
 {
-  Serial.print("  # Bytes: "); Serial.print(numBytesSend);
+/*  Serial.print("  # Bytes: "); Serial.print(numBytesSend);
   Serial.print("  Tx head 0x"); Serial.print(WirePlus_txRingBuffer.head, HEX);
-  Serial.print("  Tx tail 0x"); Serial.print(WirePlus_txRingBuffer.tail, HEX); 
+  Serial.print("  Tx tail 0x"); Serial.print(WirePlus_txRingBuffer.tail, HEX); */
+  Serial.print("  # Bytes to Receive: "); Serial.print(bytesToReceive);
   Serial.println();
 }
 /** @}*/
