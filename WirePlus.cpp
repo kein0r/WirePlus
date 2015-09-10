@@ -237,10 +237,6 @@ WirePlus_Status_t WirePlus::getStatus()
   return status;
 }
 
-
-uint8_t numBytesSend = 0x00;
-uint8_t lastByteTransmitted = 0x00;
-
 /**
  * ISR for two wire interface TWI
  * Only exchange between ISR and the class WirePlus are the two ring buffer.
@@ -250,8 +246,10 @@ uint8_t lastByteTransmitted = 0x00;
  */
 ISR(TWI_vect)
 {
+#ifdef WIREPLUS_DEBUG
   PORTB = TW_STATUS>>2;
   digitalWrite(4, HIGH);
+#endif
   /* See why exactly interrupt was triggered */
   switch(TW_STATUS)
   {
@@ -272,8 +270,6 @@ ISR(TWI_vect)
       /* Process next byte in queue if there is one */
       if (! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
       {
-        lastByteTransmitted = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
-        numBytesSend++;
         TWDR = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
         TWCR = WIREPLUS_TWCR_CLEAR;
       }
@@ -325,15 +321,9 @@ ISR(TWI_vect)
       TWCR = WIREPLUS_TWCR_CLEAR;
     break;
   }
+#ifdef WIREPLUS_DEBUG
   digitalWrite(4, LOW);
+#endif
 }
 
-void printStatus()
-{
-/*  Serial.print("  # Bytes: "); Serial.print(numBytesSend);
-  Serial.print("  Tx head 0x"); Serial.print(WirePlus_txRingBuffer.head, HEX);
-  Serial.print("  Tx tail 0x"); Serial.print(WirePlus_txRingBuffer.tail, HEX); */
-  Serial.print("  # Bytes to Receive: "); Serial.print(bytesToReceive);
-  Serial.println();
-}
 /** @}*/

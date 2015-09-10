@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 /*******************| Macros |*****************************************/
+#define WIREPLUS_DEBUG
+
 #ifndef WIREPLUS_TWI_FREQUENCY
 #define WIREPLUS_TWI_FREQUENCY        100000L
 #endif
