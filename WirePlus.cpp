@@ -209,10 +209,8 @@ uint8_t WirePlus::read( )
 
 void WirePlus::endReception()
 {
-  uint8_t test = 0;
-  /* Wait until data is completely (or NACK) received */
-  
-  while (bytesToReceive) {digitalWrite(4, test); test = ~test; };
+  /* Wait until data is completely (or NACK) received */  
+  while (bytesToReceive) {};
   /* Then request STOP */
   TWCR = WIREPLUS_TWCR_STOP;
 }
