@@ -102,6 +102,9 @@ public:
   
 };
 
+/*******************| Preinstantiate Objects |*************************/
+extern TwoWirePlus Wire;
+
 #endif
 
 /** @}*/
