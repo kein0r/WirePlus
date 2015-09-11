@@ -24,9 +24,9 @@
 /*******************| Type definitions |*******************************/
 
 /*******************| Global variables |*******************************/
-static WirePlus_RingBuffer_t WirePlus_txRingBuffer;
-static WirePlus_RingBuffer_t WirePlus_rxRingBuffer;
-static WirePlus_Status_t status = WirePlus_Init;
+static TwoWirePlus_RingBuffer_t TwoWirePlus_txRingBuffer;
+static TwoWirePlus_RingBuffer_t TwoWirePlus_rxRingBuffer;
+static TwoWirePlus_Status_t status = TwoWirePlus_Init;
 /**
  * Number of bytes requested to be received via two wire interface. In case of NACK received
  * this variable will be set to 0. Thus, #status must always be checked if this variable is used.
@@ -39,16 +39,16 @@ static volatile uint8_t bytesToReceive = 0;
  * Initializes WirePlus module.
  * @pre 
  */
-WirePlus::WirePlus(void)
+TwoWirePlus::TwoWirePlus(void)
 {
   
   /* Initialize ring buffer */
-  WirePlus_rxRingBuffer.head = 0;
-  WirePlus_rxRingBuffer.tail = 0;
-  WirePlus_rxRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ; /* Buffer is empty on start-up */
-  WirePlus_txRingBuffer.head = 0;
-  WirePlus_txRingBuffer.tail = 0;
-  WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ; /* Buffer is empty on start-up */
+  TwoWirePlus_rxRingBuffer.head = 0;
+  TwoWirePlus_rxRingBuffer.tail = 0;
+  TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ; /* Buffer is empty on start-up */
+  TwoWirePlus_txRingBuffer.head = 0;
+  TwoWirePlus_txRingBuffer.tail = 0;
+  TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ; /* Buffer is empty on start-up */
   
   /* Activate internal pullups for twi lines */
   digitalWrite(SDA, 1);
@@ -58,9 +58,9 @@ WirePlus::WirePlus(void)
    * SCL_Frequency = CPU_Freq / (16 + 2 * TWBR * PrescalerValue)
    * Prescaler will always be set to its smallest value to achieve
    * highest possible frequencies */
-  TWSR = ~WIREPLUS_TWSR_TWPS_MASK;
-  TWSR |= (WIREPLUS_TWSR_TWPS_1 & ~WIREPLUS_TWSR_TWPS_MASK);
-  TWBR = ((F_CPU / WIREPLUS_TWI_FREQUENCY) - 16) / 2;
+  TWSR = ~TWOWIREPLUS_TWSR_TWPS_MASK;
+  TWSR |= (TWOWIREPLUS_TWSR_TWPS_1 & ~TWOWIREPLUS_TWSR_TWPS_MASK);
+  TWBR = ((F_CPU / TWOWIREPLUS_TWI_FREQUENCY) - 16) / 2;
 
   // enable twi module, acks, and twi interrupt
   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
@@ -74,22 +74,22 @@ WirePlus::WirePlus(void)
  * @note This function is blocking! It will wait until all previous communication has
  * finished. Do not call in interrupt context.
  */
-void WirePlus::beginTransmission(uint8_t address)
+void TwoWirePlus::beginTransmission(uint8_t address)
 {
   /* Left shift address and add write bit */
   address = (address << 1) | TW_WRITE;
 
   /* wait until all previous communication has finished */
-  while ( ! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
+  while ( ! TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer) ) ;
   
   /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
   /* Place data in buffer */
-  WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.head] = address;
-  WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
-  WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+  TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = address;
+  TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+  TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
 
   /* Request start signal */
-  TWCR = WIREPLUS_TWCR_START;
+  TWCR = TWOWIREPLUS_TWCR_START;
 }
 
 /**
@@ -100,25 +100,25 @@ void WirePlus::beginTransmission(uint8_t address)
  * @param data data to be written
  * @pre #beginTransmission was called
  */
-void WirePlus::write(const uint8_t data)
+void TwoWirePlus::write(const uint8_t data)
 {
   /* In case buffer is empty (i.e. first byte to write), copy data directly to TWDR and ask for sent */
-  if ( WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
+  if ( TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer) )
   {
     /* need to increment first as the interrupt could happen directly after writing TWDR */
-    WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
-    WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
+    TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+    TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
     TWDR = data;
-    TWCR = WIREPLUS_TWCR_SEND;
+    TWCR = TWOWIREPLUS_TWCR_SEND;
   }
   /* if not empty use buffer */
   else {
     /* wait in case no space left in buffer */
-    while( WirePlus_RingBufferFull(WirePlus_txRingBuffer) ) ;
+    while( TwoWirePlus_RingBufferFull(TwoWirePlus_txRingBuffer) ) ;
     /* Place data in buffer */
-    WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.head] = data;
-    WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
-    WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+    TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = data;
+    TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+    TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
   }
 }
 
@@ -129,12 +129,12 @@ void WirePlus::write(const uint8_t data)
  * used as a synchronization point
  * @pre #beginTransmission was called
  */
-void WirePlus::endTransmission()
+void TwoWirePlus::endTransmission()
 {
   /* block until last byte was transferred (or better ACK for last byte was received*/
-  while(!WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) ) ;
+  while(!TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer) ) ;
   /* Then request STOP */
-  TWCR = WIREPLUS_TWCR_STOP;
+  TWCR = TWOWIREPLUS_TWCR_STOP;
 }
 
 /**
@@ -145,22 +145,22 @@ void WirePlus::endTransmission()
  * @note This function is blocking! It will wait until all previous communication has
  * finished. Do not call in interrupt context.
  */
-void WirePlus::beginReception(uint8_t address)
+void TwoWirePlus::beginReception(uint8_t address)
 {
     /* Left shift address and add write bit */
   address = (address << 1) | TW_READ;
 
   /* wait until all previous communication (rx and tx) has finished */
-  while ( ! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer)) ;
+  while ( ! TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer)) ;
   
   /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
   /* Place data in buffer */
-  WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.head] = address;
-  WirePlus_incrementIndex(WirePlus_txRingBuffer.head);
-  WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+  TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = address;
+  TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+  TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
 
   /* Request start signal */
-  TWCR = WIREPLUS_TWCR_START;
+  TWCR = TWOWIREPLUS_TWCR_START;
 }
 
 
@@ -173,7 +173,7 @@ void WirePlus::beginReception(uint8_t address)
  * start. 
  * @note This function is blocking. Don't call in interrupt context.
  */
-uint8_t WirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
+uint8_t TwoWirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
 {
   beginReception(address);
   /* bytesToReceive shall only be increased after call to beginReception to make sure all Tx is completed */
@@ -189,14 +189,14 @@ uint8_t WirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
  * @param numberOfBytes Number of bytes to receive from two wire slave device
  * @pre #beginReception must have been called first
  */
-void WirePlus::receiveBytes(uint8_t numberOfBytes)
+void TwoWirePlus::receiveBytes(uint8_t numberOfBytes)
 {
   bytesToReceive += numberOfBytes;
 }
 
-bool WirePlus::available()
+bool TwoWirePlus::available()
 {
-  return !WirePlus_RingBufferEmpty(WirePlus_rxRingBuffer);
+  return !TwoWirePlus_RingBufferEmpty(TwoWirePlus_rxRingBuffer);
 }
 
 /**
@@ -208,12 +208,12 @@ bool WirePlus::available()
  * @param length Number of bytes to receive from two wire bus
  * @pre #beginReception was called
  */
-uint8_t WirePlus::read( )
+uint8_t TwoWirePlus::read( )
 {
-  if(! WirePlus_RingBufferEmpty(WirePlus_rxRingBuffer) )
+  if(! TwoWirePlus_RingBufferEmpty(TwoWirePlus_rxRingBuffer) )
   {
-    uint8_t retVal = WirePlus_rxRingBuffer.buffer[WirePlus_rxRingBuffer.tail];;
-    WirePlus_incrementIndex(WirePlus_rxRingBuffer.tail);
+    uint8_t retVal = TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.tail];;
+    TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.tail);
     return retVal;
   }
   else {
@@ -222,21 +222,21 @@ uint8_t WirePlus::read( )
 }
 
 
-void WirePlus::endReception()
+void TwoWirePlus::endReception()
 {
   /* Wait until data is completely (or NACK) received */
   while (bytesToReceive) ;
   /* Then request STOP */
-  TWCR = WIREPLUS_TWCR_STOP;
+  TWCR = TWOWIREPLUS_TWCR_STOP;
 }
 
 /**
  * Returns number of bytes requested to be received via two wire interface. In case of NACK received
  * return value will be 0 and two wire status must be checked in addition.
  * @return Number of bytes still requested to be received by two wire interface or zero if NACK was
- * received from two wire slave device (status equals to WirePlus_MasterReceiver_NACK).
+ * received from two wire slave device (status equals to TwoWirePlus_MasterReceiver_NACK).
  */
-uint8_t WirePlus::BytesToBeReceived()
+uint8_t TwoWirePlus::BytesToBeReceived()
 {
   return bytesToReceive;
 }
@@ -245,7 +245,7 @@ uint8_t WirePlus::BytesToBeReceived()
  * Provides access to last status of two wire interface
  * @return Last status of two wire interface
  */
-WirePlus_Status_t WirePlus::getStatus()
+TwoWirePlus_Status_t TwoWirePlus::getStatus()
 {
   return status;
 }
@@ -259,7 +259,7 @@ WirePlus_Status_t WirePlus::getStatus()
  */
 ISR(TWI_vect)
 {
-#ifdef WIREPLUS_DEBUG
+#ifdef TWOWIREPLUS_DEBUG
   PORTB = TW_STATUS>>2;
   digitalWrite(4, HIGH);
 #endif
@@ -275,31 +275,31 @@ ISR(TWI_vect)
     case TW_MT_DATA_NACK: /* TODO: remove */
     case TW_MT_DATA_ACK:
       /* If ACK was received we've sent something earlier and therefore need to move read pointer */
-      WirePlus_incrementIndex(WirePlus_txRingBuffer.tail);
-      WirePlus_txRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_READ;
+      TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.tail);
+      TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
       /* fall through */
     case TW_START:
     case TW_REP_START:
       /* Process next byte in queue if there is one */
-      if (! WirePlus_RingBufferEmpty(WirePlus_txRingBuffer) )
+      if (! TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer) )
       {
-        TWDR = WirePlus_txRingBuffer.buffer[WirePlus_txRingBuffer.tail];
-        TWCR = WIREPLUS_TWCR_CLEAR;
+        TWDR = TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.tail];
+        TWCR = TWOWIREPLUS_TWCR_CLEAR;
       }
       else if (bytesToReceive) /* Nothing more to send but something to receive */
       {
         if (bytesToReceive == 1) /* Just one byte to receive so we need to directly send NACK */
         {
-          TWCR = WIREPLUS_TWCR_NACK;
+          TWCR = TWOWIREPLUS_TWCR_NACK;
         }
         else 
         {
-          TWCR = WIREPLUS_TWCR_CLEAR;
+          TWCR = TWOWIREPLUS_TWCR_CLEAR;
         }
       }
       else /* nothing else to do. Just clear interrupt and wait for more data or stop */
       {
-        TWCR = WIREPLUS_TWCR_RELEASE;
+        TWCR = TWOWIREPLUS_TWCR_RELEASE;
       }
       break;
     case TW_MR_DATA_NACK:
@@ -308,38 +308,38 @@ ISR(TWI_vect)
       if (bytesToReceive)
       {
         /* Place data in buffer */
-        WirePlus_rxRingBuffer.buffer[WirePlus_rxRingBuffer.head] = TWDR;
-        WirePlus_incrementIndex(WirePlus_rxRingBuffer.head);
-        WirePlus_rxRingBuffer.lastOperation = WIREPLUS_LASTOPERATION_WRITE;
+        TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.head] = TWDR;
+        TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.head);
+        TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
         bytesToReceive--;
       }
       /* Is there more than one byte to be received left after this one */
       if (bytesToReceive > 1)
       {
         /* If yes, send ACK */
-        TWCR = WIREPLUS_TWCR_ACK;
+        TWCR = TWOWIREPLUS_TWCR_ACK;
       }
       else if (bytesToReceive == 1)
       {
         /* Send NACK for last byte (and all following one) to stop reception */
-        TWCR = WIREPLUS_TWCR_NACK;
+        TWCR = TWOWIREPLUS_TWCR_NACK;
       }
       else /* nothing else to do. Just clear interrupt and wait for more data or stop */
       {
-        TWCR = WIREPLUS_TWCR_RELEASE;
+        TWCR = TWOWIREPLUS_TWCR_RELEASE;
       }
       break;
     default:
       /* If something is not handled above clear at least INT and go on */
-      TWCR = WIREPLUS_TWCR_CLEAR;
+      TWCR = TWOWIREPLUS_TWCR_CLEAR;
     break;
   }
-#ifdef WIREPLUS_DEBUG
+#ifdef TWOWIREPLUS_DEBUG
   digitalWrite(4, LOW);
 #endif
 }
 
 /*******************| Preinstantiate Objects |*************************/
-WirePlus Wire = WirePlus();
+TwoWirePlus Wire = TwoWirePlus();
 
 /** @}*/

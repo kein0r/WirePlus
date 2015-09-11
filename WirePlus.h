@@ -1,26 +1,26 @@
 /** @ingroup WirePlus
  * @{
  */
-#ifndef  WIREPLUS_H
-#define  WIREPLUS_H
+#ifndef  TWOWIREPLUS_H
+#define  TWOWIREPLUS_H
 
 /*******************| Inclusions |*************************************/
 #include <stdint.h>
 
 /*******************| Macros |*****************************************/
-#define WIREPLUS_DEBUG
+#define TWOWIREPLUS_DEBUG
 
-#ifndef WIREPLUS_TWI_FREQUENCY
-#define WIREPLUS_TWI_FREQUENCY        100000L
+#ifndef TWOWIREPLUS_TWI_FREQUENCY
+#define TWOWIREPLUS_TWI_FREQUENCY        100000L
 #endif
 
-#define WIREPLUS_RINGBUFFER_SIZE      16
+#define TWOWIREPLUS_RINGBUFFER_SIZE      16
 
-#define WIREPLUS_TWSR_TWPS_MASK       (_BV(TWPS1)|_BV(TWPS0))
-#define WIREPLUS_TWSR_TWPS_1          0x00
-#define WIREPLUS_TWSR_TWPS_4          0x01
-#define WIREPLUS_TWSR_TWPS_16         0x02
-#define WIREPLUS_TWSR_TWPS_64         0x03
+#define TWOWIREPLUS_TWSR_TWPS_MASK       (_BV(TWPS1)|_BV(TWPS0))
+#define TWOWIREPLUS_TWSR_TWPS_1          0x00
+#define TWOWIREPLUS_TWSR_TWPS_4          0x01
+#define TWOWIREPLUS_TWSR_TWPS_16         0x02
+#define TWOWIREPLUS_TWSR_TWPS_64         0x03
 
 /*
  * TWINT: TWI Interrupt Flag
@@ -31,24 +31,24 @@
  * TWEN: TWI Enable Bit
  * TWIE: TWI Interrupt Enable
  */
-#define WIREPLUS_TWCR_START           _BV(TWINT) | _BV(TWEA) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_CLEAR           _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_SEND            _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_STOP            _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTO);
-#define WIREPLUS_TWCR_ACK             _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_NACK            _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
-#define WIREPLUS_TWCR_RELEASE         _BV(TWEA) | _BV(TWEN)
+#define TWOWIREPLUS_TWCR_START           _BV(TWINT) | _BV(TWEA) | _BV(TWSTA) | _BV(TWEN) | _BV(TWIE)
+#define TWOWIREPLUS_TWCR_CLEAR           _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
+#define TWOWIREPLUS_TWCR_SEND            _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
+#define TWOWIREPLUS_TWCR_STOP            _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTO);
+#define TWOWIREPLUS_TWCR_ACK             _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
+#define TWOWIREPLUS_TWCR_NACK            _BV(TWINT) | _BV(TWEN) | _BV(TWIE)
+#define TWOWIREPLUS_TWCR_RELEASE         _BV(TWEA) | _BV(TWEN)
 /*******************| Type definitions |*******************************/
 
-typedef uint8_t WirePlus_BufferIndex_t;
+typedef uint8_t TwoWirePlus_BufferIndex_t;
 
 /**
  * Keeps track of last operation to ring buffer. Zero (or false) if last operation was 
  * a read, otherwise last operation was a write to buffer 
  */
-typedef bool WirePlus_lastOperation_t; 
-#define WIREPLUS_LASTOPERATION_READ         false
-#define WIREPLUS_LASTOPERATION_WRITE        true
+typedef bool TwoWirePlus_lastOperation_t; 
+#define TWOWIREPLUS_LASTOPERATION_READ         false
+#define TWOWIREPLUS_LASTOPERATION_WRITE        true
 
 /**
  * \brief Data struct for ring buffer.
@@ -58,22 +58,22 @@ typedef bool WirePlus_lastOperation_t;
  */
 typedef struct
 {
-  unsigned char buffer[WIREPLUS_RINGBUFFER_SIZE];     /*!< Content of ring buffer */
-  volatile WirePlus_BufferIndex_t head;               /*!< Index for writing to the ring buffer. Index is increased after writing (i.e. producing) an element */
-  volatile WirePlus_BufferIndex_t tail;               /*!< Index for reading from ring buffer. Index is increased after reading (i.e consuming) an element. */
-  volatile WirePlus_lastOperation_t lastOperation;    /*!< False if last operation was reading the buffer, true if last operation was writting into the buffer */
-} WirePlus_RingBuffer_t;
+  unsigned char buffer[TWOWIREPLUS_RINGBUFFER_SIZE];     /*!< Content of ring buffer */
+  volatile TwoWirePlus_BufferIndex_t head;               /*!< Index for writing to the ring buffer. Index is increased after writing (i.e. producing) an element */
+  volatile TwoWirePlus_BufferIndex_t tail;               /*!< Index for reading from ring buffer. Index is increased after reading (i.e consuming) an element. */
+  volatile TwoWirePlus_lastOperation_t lastOperation;    /*!< False if last operation was reading the buffer, true if last operation was writting into the buffer */
+} TwoWirePlus_RingBuffer_t;
 
 /* Some function like macro to make code more readable */
-#define WirePlus_incrementIndex(a)          a = (a + 1) % WIREPLUS_RINGBUFFER_SIZE
-#define WirePlus_RingBufferFull(x)          (x.lastOperation == WIREPLUS_LASTOPERATION_WRITE && (x.head == x.tail))
-#define WirePlus_RingBufferEmpty(x)         (x.lastOperation == WIREPLUS_LASTOPERATION_READ && (x.head == x.tail))
+#define TwoWirePlus_incrementIndex(a)          a = (a + 1) % TWOWIREPLUS_RINGBUFFER_SIZE
+#define TwoWirePlus_RingBufferFull(x)          (x.lastOperation == TWOWIREPLUS_LASTOPERATION_WRITE && (x.head == x.tail))
+#define TwoWirePlus_RingBufferEmpty(x)         (x.lastOperation == TWOWIREPLUS_LASTOPERATION_READ && (x.head == x.tail))
 
 typedef enum {
-  WirePlus_Init,
-  WirePlus_MasterSender_NACK,
-  WirePlus_MasterReceiver_NACK,
-} WirePlus_Status_t;
+  TwoWirePlus_Init,
+  TwoWirePlus_MasterSender_NACK,
+  TwoWirePlus_MasterReceiver_NACK,
+} TwoWirePlus_Status_t;
 
 
 /*******************| Global variables |*******************************/
@@ -82,12 +82,12 @@ typedef enum {
 
 void printStatus();
 
-class WirePlus
+class TwoWirePlus
 {
 private:
   
 public:
-  WirePlus();
+  TwoWirePlus();
   void beginTransmission(uint8_t address);
   void write(uint8_t data);
   void endTransmission();
@@ -98,7 +98,7 @@ public:
   uint8_t read();
   uint8_t BytesToBeReceived();
   void endReception();
-  WirePlus_Status_t getStatus();
+  TwoWirePlus_Status_t getStatus();
   
 };
 
