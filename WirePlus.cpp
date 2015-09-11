@@ -181,6 +181,19 @@ uint8_t WirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
   endReception();
 }
 
+/**
+ * Requests to receive #numberOfBytes from two wire slave device. This function can be used several
+ * times between #beginReception and #endRecepetion to receive data.
+ * This function does not directly receive those bytes but forwards the request to the interrupt
+ * function. Bytes can be read using #available and #read function.
+ * @param numberOfBytes Number of bytes to receive from two wire slave device
+ * @pre #beginReception must have been called first
+ */
+void WirePlus::receiveBytes(uint8_t numberOfBytes)
+{
+  bytesToReceive += numberOfBytes;
+}
+
 bool WirePlus::available()
 {
   return !WirePlus_RingBufferEmpty(WirePlus_rxRingBuffer);
@@ -325,5 +338,8 @@ ISR(TWI_vect)
   digitalWrite(4, LOW);
 #endif
 }
+
+/*******************| Preinstantiate Objects |*************************/
+WirePlus Wire = WirePlus();
 
 /** @}*/
