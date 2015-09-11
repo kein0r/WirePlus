@@ -15,7 +15,7 @@
  */
 
 /*******************| Inclusions |*************************************/
-#include "WirePlus.h"
+#include "TwoWirePlus.h"
 #include <Arduino.h>
 #include <compat/twi.h>
 
