@@ -1,11 +1,27 @@
-/** @ingroup WirePlus
+/** @ingroup TwoWirePlus
  * @{
  *
- * @brief Replacement library for Arduino Wire library.
+ * @mainpage
+ * @brief Replacement library for Arduino Wire library which should be a bit more
+ * flexible
+ *
+ * Design goal was to implement a library which can be used for a wider range of two
+ * wire devices while still beeing API compatible to the original TwoWire 
+ * [Wire Library](https://www.arduino.cc/en/pmwiki.php?n=Reference/Wire).
+ *
+ * Ring buffer are used for rx and tx in order to decouple the application as much as
+ * possible from two wire functionality.
+ * Sending bytes will, in contrast to original two wire library, happen in background
+ * whenever a byte is made available by application and *not* when #TwoWirePlus::endTransmission
+ * is called. This way the application looses a bit control about when the actual data
+ * is the advantage, however, is that data will be send in background already while 
+ * application is on providing more data.
+ * Positive side-effext is that size of buffer can be redruced.
+ *
  * Every fuction which request a specific bus state (START, RE-START, STOP) is blocking
  * and can therefore be used to sync application with two wire bus.
  *
- * TODO:
+ * @todo
  * - Complete error handling
  * - Add lastState to return value for endTransmission, 3 and endReception 
  * - lastStatus (NACK, etc. etc.)
@@ -183,7 +199,7 @@ uint8_t TwoWirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
 
 /**
  * Requests to receive #numberOfBytes from two wire slave device. This function can be used several
- * times between #beginReception and #endRecepetion to receive data.
+ * times between #beginReception and #endReception to receive data.
  * This function does not directly receive those bytes but forwards the request to the interrupt
  * function. Bytes can be read using #available and #read function.
  * @param numberOfBytes Number of bytes to receive from two wire slave device
@@ -200,13 +216,11 @@ bool TwoWirePlus::available()
 }
 
 /**
- * Asks for #length bytes from two wire bus. This function can be called several times
- * to consecutively receive more bytes without sending a stop in between.
- * 
- * @param data Pointer to buffer where to the data received from two wire slave device will
- * be copied. Application must make sure that buffer is big enough to hold data completely
- * @param length Number of bytes to receive from two wire bus
- * @pre #beginReception was called
+ * Returns one byte, if any, from rx ring buffer. If no bytes is present 0x00 will be 
+ * returned. #available shall be used before calling this function to check if a byte
+ * was received. 
+ * @return Next byte from rc ring buffer or 0x00 if no byte was in buffer
+ * @pre #available was called to check if a byte is present in the buffer
  */
 uint8_t TwoWirePlus::read( )
 {

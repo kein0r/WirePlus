@@ -1,4 +1,4 @@
-/** @ingroup WirePlus
+/** @ingroup TwoWirePlus
  * @{
  */
 #ifndef  TWOWIREPLUS_H
@@ -99,7 +99,6 @@ public:
   uint8_t BytesToBeReceived();
   void endReception();
   TwoWirePlus_Status_t getStatus();
-  
 };
 
 /*******************| Preinstantiate Objects |*************************/
