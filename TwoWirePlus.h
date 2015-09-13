@@ -40,6 +40,9 @@
 #define TWOWIREPLUS_TWCR_RELEASE         _BV(TWEA) | _BV(TWEN)
 /*******************| Type definitions |*******************************/
 
+/**
+ * Typedef to make access of buffer easier
+ */
 typedef uint8_t TwoWirePlus_BufferIndex_t;
 
 /**
@@ -51,7 +54,7 @@ typedef bool TwoWirePlus_lastOperation_t;
 #define TWOWIREPLUS_LASTOPERATION_WRITE        true
 
 /**
- * \brief Data struct for ring buffer.
+ * Data structure for ring buffer.
  * Index pointer for head and tail will always point to element which is next to be read/written.
  * This ring buffer will use "Record last operation" for full/empty buffer distinction see
  * https://en.wikipedia.org/wiki/Circular_buffer "Record last operation" for details
@@ -69,11 +72,10 @@ typedef struct
 #define TwoWirePlus_RingBufferFull(x)          (x.lastOperation == TWOWIREPLUS_LASTOPERATION_WRITE && (x.head == x.tail))
 #define TwoWirePlus_RingBufferEmpty(x)         (x.lastOperation == TWOWIREPLUS_LASTOPERATION_READ && (x.head == x.tail))
 
-typedef enum {
-  TwoWirePlus_Init,
-  TwoWirePlus_MasterSender_NACK,
-  TwoWirePlus_MasterReceiver_NACK,
-} TwoWirePlus_Status_t;
+/**
+ * Last status of two wire bus. This variable will reflect the content of TWSR and therefore
+ */
+typedef uint8_t TwoWirePlus_Status_t;
 
 
 /*******************| Global variables |*******************************/

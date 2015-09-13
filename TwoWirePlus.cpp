@@ -23,8 +23,6 @@
  *
  * @todo
  * - Complete error handling
- * - Add lastState to return value for endTransmission, 3 and endReception 
- * - lastStatus (NACK, etc. etc.)
  * - Timeout handling
  * - Think about where to add interrupt locking
  * - Add "whait until STOP was send to endX
@@ -42,7 +40,7 @@
 /*******************| Global variables |*******************************/
 static TwoWirePlus_RingBuffer_t TwoWirePlus_txRingBuffer;
 static TwoWirePlus_RingBuffer_t TwoWirePlus_rxRingBuffer;
-static TwoWirePlus_Status_t status = TwoWirePlus_Init;
+static TwoWirePlus_Status_t status = 0x0;
 /**
  * Number of bytes requested to be received via two wire interface. In case of NACK received
  * this variable will be set to 0. Thus, #status must always be checked if this variable is used.
@@ -147,10 +145,15 @@ void TwoWirePlus::write(const uint8_t data)
  */
 TwoWirePlus_Status_t TwoWirePlus::endTransmission()
 {
-  /* block until last byte was transferred (or better ACK for last byte was received*/
+  /* block until last byte was transferred (or better ACK for last byte was received */
   while(!TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer) ) ;
   /* Then request STOP */
   TWCR = TWOWIREPLUS_TWCR_STOP;
+
+  /* Problem: TWINT is not set after a stop condition. Thus, we wait for STOP bit is cleared
+   * in TWCR.
+   */
+  while(TWCR & _BV(TWSTO)) ;
 
   return status;
 }
@@ -244,6 +247,10 @@ void TwoWirePlus::endReception()
   while (bytesToReceive) ;
   /* Then request STOP */
   TWCR = TWOWIREPLUS_TWCR_STOP;
+  /* Problem: TWINT is not set after a stop condition. Thus, we wait for STOP bit is cleared
+   * in TWCR.
+   */
+  while(TWCR & _BV(TWSTO)) ;
 }
 
 /**
@@ -279,6 +286,8 @@ ISR(TWI_vect)
   PORTB = TW_STATUS>>2;
   digitalWrite(4, HIGH);
 #endif
+  /* remember current status for application */
+  status = TW_STATUS;
   /* See why exactly interrupt was triggered */
   switch(TW_STATUS)
   {
@@ -286,9 +295,9 @@ ISR(TWI_vect)
      * byte after each other after START, RE_START, ACK from the ring buffer. */
     case TW_MT_SLA_ACK:
     case TW_MR_SLA_ACK:
-    case TW_MT_SLA_NACK:  /* TODO: remove */
-    case TW_MR_SLA_NACK:  /* TODO: remove */
-    case TW_MT_DATA_NACK: /* TODO: remove */
+    case TW_MT_SLA_NACK:
+    case TW_MR_SLA_NACK:
+    case TW_MT_DATA_NACK:
     case TW_MT_DATA_ACK:
       /* If ACK was received we've sent something earlier and therefore need to move read pointer */
       TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.tail);
