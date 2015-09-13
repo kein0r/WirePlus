@@ -145,12 +145,14 @@ void TwoWirePlus::write(const uint8_t data)
  * used as a synchronization point
  * @pre #beginTransmission was called
  */
-void TwoWirePlus::endTransmission()
+TwoWirePlus_Status_t TwoWirePlus::endTransmission()
 {
   /* block until last byte was transferred (or better ACK for last byte was received*/
   while(!TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer) ) ;
   /* Then request STOP */
   TWCR = TWOWIREPLUS_TWCR_STOP;
+
+  return status;
 }
 
 /**
@@ -351,6 +353,13 @@ ISR(TWI_vect)
 #ifdef TWOWIREPLUS_DEBUG
   digitalWrite(4, LOW);
 #endif
+}
+
+/**
+ * This function exists just for compatibility reasons with original TwoWire library
+ */
+void TwoWirePlus::begin()
+{
 }
 
 /*******************| Preinstantiate Objects |*************************/

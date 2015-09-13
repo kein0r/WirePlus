@@ -88,9 +88,10 @@ private:
   
 public:
   TwoWirePlus();
+  void begin();
   void beginTransmission(uint8_t address);
   void write(uint8_t data);
-  void endTransmission();
+  TwoWirePlus_Status_t endTransmission();
   void beginReception(uint8_t address);
   uint8_t requestFrom(uint8_t address, uint8_t numberOfBytes);
   void receiveBytes(uint8_t numberOfBytes);
