@@ -1,0 +1,45 @@
+// I2C Scanner
+// Originally written by Nick Gammon
+// Date: 20th April 2011
+// Adapted for TwoWirePlus library by Jan Rüdiger
+// Date: 13th of September 2015
+
+#include <TwoWirePlus.h>
+/* To get TW_STATUS definitions like TW_MT_SLA_NACK */
+#include <compat/twi.h>
+
+void setup() {
+  Serial.begin (115200);
+
+  // Leonardo: wait for serial port to connect
+  while (!Serial) 
+    {
+    }
+
+  Serial.println ();
+  Serial.println ("I2C scanner. Scanning ...");
+  byte count = 0;
+  
+  Wire.begin();
+  for (byte i = 8; i < 120; i++)
+  {
+    Wire.beginTransmission (i);
+    /* NEW: return value for endTransmittion is a bit different for TwoWirePlus library */
+    if (Wire.endTransmission () != TW_MT_SLA_NACK)
+      {
+      Serial.print ("Found address: ");
+      Serial.print (i, DEC);
+      Serial.print (" (0x");
+      Serial.print (i, HEX);
+      Serial.println (")");
+      count++;
+      delay (1);  // maybe unneeded?
+      } // end of good response
+  } // end of for loop
+  Serial.println ("Done.");
+  Serial.print ("Found ");
+  Serial.print (count, DEC);
+  Serial.println (" device(s).");
+}  // end of setup
+
+void loop() {}
