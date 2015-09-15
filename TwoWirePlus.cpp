@@ -6,19 +6,20 @@
  * flexible
  *
  * Design goal was to implement a library which can be used for a wider range of two
- * wire devices while still beeing API compatible to the original TwoWire 
+ * wire devices while still being API compatible to the original
  * [Wire Library](https://www.arduino.cc/en/pmwiki.php?n=Reference/Wire).
  *
- * Ring buffer are used for rx and tx in order to decouple the application as much as
- * possible from two wire functionality.
- * Sending bytes will, in contrast to original two wire library, happen in background
- * whenever a byte is made available by application and *not* when #TwoWirePlus::endTransmission
- * is called. This way the application looses a bit control about when the actual data
- * is the advantage, however, is that data will be send in background already while 
- * application is on providing more data.
- * Positive side-effext is that size of buffer can be redruced.
+ * Two main differences compared to the original library
+ * 1. Ring buffer are used for rx and tx in order to decouple the application as much as
+ * possible from two wire functionality. Only one buffer for rx and tx is used.
+ * 2. Sending an receiving data is done asynchronously. Sending bytes will, in contrast to
+ * original two wire library, happen in background by ISR whenever a byte is made available by
+ * application and *not* when #TwoWirePlus::endTransmission is called. This way the
+ * application looses a bit control about when the actual data is sent, the advantage, however,
+ * is that data will be send in background already while application is on providing more data.
+ * Positive side-effect is that size of buffer can be reduced.
  *
- * Every fuction which request a specific bus state (START, RE-START, STOP) is blocking
+ * Every function which request a specific bus state (START, RE-START, STOP) is blocking
  * and can therefore be used to sync application with two wire bus.
  *
  * @todo
