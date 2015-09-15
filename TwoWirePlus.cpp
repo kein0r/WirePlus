@@ -27,6 +27,7 @@
  * - Timeout handling
  * - Think about where to add interrupt locking
  * - Add "whait until STOP was send to endX
+ * - Add two wire slave functionality
  */
 
 /*******************| Inclusions |*************************************/
