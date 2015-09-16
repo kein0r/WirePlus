@@ -226,7 +226,7 @@ bool TwoWirePlus::available()
  * Returns one byte, if any, from rx ring buffer. If no bytes is present 0x00 will be 
  * returned. #available shall be used before calling this function to check if a byte
  * was received. 
- * @return Next byte from rc ring buffer or 0x00 if no byte was in buffer
+ * @return Next byte from rx ring buffer or 0x00 if no byte was in buffer
  * @pre #available was called to check if a byte is present in the buffer
  */
 uint8_t TwoWirePlus::read( )
@@ -295,10 +295,13 @@ ISR(TWI_vect)
   {
     /* Slave adress is just one of the bytes which is transefered. Thus, we will just sent one
      * byte after each other after START, RE_START, ACK from the ring buffer. */
+    case TW_MR_SLA_NACK:
+      /* In case we receive NACK from two wire slave device there is nothing more to receive */
+      bytesToReceive = 0;
+      /* fall through */
     case TW_MT_SLA_ACK:
     case TW_MR_SLA_ACK:
     case TW_MT_SLA_NACK:
-    case TW_MR_SLA_NACK:
     case TW_MT_DATA_NACK:
     case TW_MT_DATA_ACK:
       /* If ACK was received we've sent something earlier and therefore need to move read pointer */
@@ -330,6 +333,7 @@ ISR(TWI_vect)
       }
       break;
     case TW_MR_DATA_NACK:
+      /* No need to change bytesToReceive here because we are the one who are sending this NACK */
     case TW_MR_DATA_ACK:
       /* No check for buffer override done here because this would block the complete system */
       if (bytesToReceive)
