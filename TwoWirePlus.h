@@ -97,7 +97,7 @@ public:
   void beginReception(uint8_t address);
   uint8_t requestFrom(uint8_t address, uint8_t numberOfBytes);
   void receiveBytes(uint8_t numberOfBytes);
-  bool available();
+  uint8_t available();
   uint8_t read();
   uint8_t BytesToBeReceived();
   void endReception();

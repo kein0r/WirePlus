@@ -217,9 +217,9 @@ void TwoWirePlus::receiveBytes(uint8_t numberOfBytes)
   bytesToReceive += numberOfBytes;
 }
 
-bool TwoWirePlus::available()
+uint8_t TwoWirePlus::available()
 {
-  return !TwoWirePlus_RingBufferEmpty(TwoWirePlus_rxRingBuffer);
+  return (TwoWirePlus_rxRingBuffer.head - TwoWirePlus_rxRingBuffer.tail) % TWOWIREPLUS_RINGBUFFER_SIZE;
 }
 
 /**
