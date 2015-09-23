@@ -57,7 +57,18 @@ static volatile uint8_t bytesToReceive = 0;
  */
 TwoWirePlus::TwoWirePlus(void)
 {
-  
+#ifdef TWOWIREPLUS_DEBUG
+  /* make PORTB an output for TWSTATUS output */
+  pinMode(8, OUTPUT);
+  pinMode(9, OUTPUT);
+  pinMode(10, OUTPUT);
+  pinMode(11, OUTPUT);
+  pinMode(12, OUTPUT);
+  pinMode(13, OUTPUT);
+  /* make digital pin 4 output for ISR entry/exit signaling */
+  pinMode(4, OUTPUT);
+#endif
+
   /* Initialize ring buffer */
   TwoWirePlus_rxRingBuffer.head = 0;
   TwoWirePlus_rxRingBuffer.tail = 0;
@@ -162,8 +173,9 @@ TwoWirePlus_Status_t TwoWirePlus::endTransmission()
 
 /**
  * Function to initiate a read from two wire slave device. Two wire start will be sent followed
- * by address include read bit
- * @param address 7bit slave address. Adress will autmatically be left shifted by one
+ * by address include read bit. #bytesToReceive is not reset by this function. Application can
+ * use #requestBytes to set bytes to received before calling this function.
+ * @param address 7bit slave address. Address will automatically be left shifted by one
  * and read bit added.
  * @note This function is blocking! It will wait until all previous communication has
  * finished. Do not call in interrupt context.
@@ -208,15 +220,21 @@ uint8_t TwoWirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
  * Requests to receive #numberOfBytes from two wire slave device. This function can be used several
  * times between #beginReception and #endReception to receive data.
  * This function does not directly receive those bytes but forwards the request to the interrupt
- * function. Bytes can be read using #available and #read function.
+ * function. Bytes can be read using #available and #read function. However, after the very last byte
+ * to receive a NACK will be sent for the last byte. Therfore make sure that #bytesToReceive always is
+ * greater than one.
  * @param numberOfBytes Number of bytes to receive from two wire slave device
  * @pre #beginReception must have been called first
  */
-void TwoWirePlus::receiveBytes(uint8_t numberOfBytes)
+void TwoWirePlus::requestBytes(uint8_t numberOfBytes)
 {
   bytesToReceive += numberOfBytes;
 }
 
+/**
+ * Returns the number of bytes already received from two wire slave device.
+ * @return Number of bytes already received from two wire slave device
+ */
 uint8_t TwoWirePlus::available()
 {
   return (TwoWirePlus_rxRingBuffer.head - TwoWirePlus_rxRingBuffer.tail) % TWOWIREPLUS_RINGBUFFER_SIZE;

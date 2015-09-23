@@ -96,7 +96,7 @@ public:
   TwoWirePlus_Status_t endTransmission();
   void beginReception(uint8_t address);
   uint8_t requestFrom(uint8_t address, uint8_t numberOfBytes);
-  void receiveBytes(uint8_t numberOfBytes);
+  void requestBytes(uint8_t numberOfBytes);
   uint8_t available();
   uint8_t read();
   uint8_t BytesToBeReceived();
