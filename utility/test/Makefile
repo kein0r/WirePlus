@@ -41,16 +41,20 @@ all: $(CC_TO_OBJ_TO_BUILD)
 .PHONY: clean help run
 	
 clean:
-	del /q /s *.o *.gcno *.gcda $(OUTPUT)
+	del /q /s *.o *.gcno *.gcda $(OUTPUT).exe
 	
 run: $(OUTPUT).exe
 	$(OUTPUT)
+	
+coverage: all
+	$(OUTPUT)
+	gcov *.gcno
 
 help:
 	@echo   .
 	@echo   The following make targets are available
 	@echo   .
-	@echo   all - Build complete unit tests"
+	@echo   all - Build complete unit tests
 	@echo   clean - Delete all intermediate files and binary
 	@echo   run - Run all unit tests
 	@echo   help - This message
