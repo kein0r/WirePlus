@@ -17,7 +17,7 @@ CC_TO_OBJ_TO_BUILD = $(addsuffix .o,$(basename $(CC_FILES_TO_BUILD)))
 
 #
 # Add flags needed for gcov and -Wall which is never a bad idea
-CFLAGS += -Wall -g -fprofile-arcs -ftest-coverage
+CFLAGS += -Wall -g -fprofile-arcs -ftest-coverage -fno-exceptions
 
 #
 # Add standard include directories 

@@ -27,6 +27,29 @@ static void setUp(void);
 static void tearDown(void);
 
 /**
+ * Helper function to reset buffer during a test
+ */
+void TwoWirePlus_BaseTest_resetBuffer()
+{
+	TwoWirePlus_rxRingBuffer.head = 0;
+	TwoWirePlus_rxRingBuffer.tail = 0;
+	TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ; /* Buffer is empty on start-up */
+	TwoWirePlus_txRingBuffer.head = 0;
+	TwoWirePlus_txRingBuffer.tail = 0;
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ; /* Buffer is empty on start-up */
+	for (int i=0; i< TWOWIREPLUS_RINGBUFFER_SIZE; i++)
+	{
+		TwoWirePlus_txRingBuffer.buffer[i] = TWOWIREPLUS_BASETEST_BUFFERINITVALUE;
+		TwoWirePlus_rxRingBuffer.buffer[i] = TWOWIREPLUS_BASETEST_BUFFERINITVALUE;
+	}
+	TwoWirePlus_bytesToReceive = 0;
+
+	TWDR = 0;
+	TWCR = 0;
+	TWBR = 0;
+}
+
+/**
  * A member of TwoWirePlus named Wire is already created in TwoWirePlus.cpp.
  * Therefore we assume that the constructor is already called. Check if twi
  * register TWSR, TWBR are set-up correctly.
@@ -36,16 +59,16 @@ static void TwoWirePlus_BaseTest_Constructor_TC1(void)
 	/* Check if two wire pre-scaler Bits 1..0 – TWPS: TWI Prescaler Bits - part of
 	 * TWSR are set to 0, that it pre-scaler equals 1.
 	 */
-	TEST_ASSERT_EQUAL_INT(0x00, ((uint8_t)TWSR & 0x03));
+	TEST_ASSERT_EQUAL_INT(0x00, (((uint8_t)TWSR & 0x03)));
 	/* Check if baudrate in TWBR is set according to TWOWIREPLUS_TWI_FREQUENCY
 	 * SCL_Frequency = CPU_Freq / (16 + 2 * TWBR * PrescalerValue). With pre-scaler
 	 * equals to one, TWBR should be ((F_CPU / TWOWIREPLUS_TWI_FREQUENCY) - 16)/2
 	 */
-	TEST_ASSERT_EQUAL_INT( ((F_CPU / TWOWIREPLUS_TWI_FREQUENCY) - 16)/2, ((uint8_t)TWBR));
+	TEST_ASSERT_EQUAL_INT( (((F_CPU / TWOWIREPLUS_TWI_FREQUENCY) - 16)/2), ((uint8_t)TWBR));
 	/* Check if TWCR was correctly set to TWEN (bit 2, 0x04), TWIE (bit 0, 0x01),
 	 * TWEA (bit 6, 0x40).
 	 */
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA, TWCR);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA), TWCR);
 	/* Check if SDA and SCL pins are set to HIGH (one) to enable internal pull-up
 	 */
 	TEST_ASSERT_EQUAL_INT(0x01, SDA_reg);
@@ -68,45 +91,258 @@ static void TwoWirePlus_BaseTest_Constructor_TC2(void)
 }
 
 /**
+ * When calling beginTransmission address shall be shifted by one to the left
+ * and read bit (bit 0) shall be set. After this START shall be requested in TWCR
+ * Test if address << 1 | 0x01
+ */
+static void TwoWirePlus_BaseTest_beginTransmission_TC1(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+
+	/* Start reading from address 0x42 four bytes */
+	Wire.beginTransmission(0x42);
+	/* Test if address SLA+R was written to txRingBuffer and that START was requested in TWCR */
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
+	TEST_ASSERT_EQUAL_INT((0x42 << 1), TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_BaseTest_previousElement(TwoWirePlus_txRingBuffer.head)]);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_TWCR_START), TWCR);
+}
+
+/**
+ * When calling beginTransmission TWDR shall not be changed (TWDR can't be pre-loaded)
+ */
+static void TwoWirePlus_BaseTest_beginTransmission_TC2(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWDR = 0xaa;
+	Wire.beginTransmission(0x42);
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
+}
+
+/**
+ * When txRingBuffer is empty write shall put directly into TWDR, nonetheless txRingBuffer
+ * head shall be increased because it will later be decreased in ISR.
+ * After data was written tw sent shall be requested
+ */
+static void TwoWirePlus_BaseTest_write_TC1(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWDR = 0xaa;
+	Wire.write(0x55);
+	/* Test if byte was written to TWDR */
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
+	/* Test if head of ring-buffer was increased */
+	TEST_ASSERT_EQUAL_INT(0x01, TwoWirePlus_BaseTest_RingBufferBytesAvailable(TwoWirePlus_txRingBuffer));
+	/* Test if tw sent was requested */
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT), TWCR);
+
+	/* Test again, just at the end of buffer */
+	TwoWirePlus_BaseTest_resetBuffer();
+	/* Move head and tail to buffer end and see if this still works */
+	TwoWirePlus_txRingBuffer.head = TWOWIREPLUS_RINGBUFFER_SIZE-1;
+	TwoWirePlus_txRingBuffer.tail = TWOWIREPLUS_RINGBUFFER_SIZE-1;
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
+	TWDR = 0xaa;
+	Wire.write(0x55);
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
+	TEST_ASSERT_EQUAL_INT(0x01, TwoWirePlus_BaseTest_RingBufferBytesAvailable(TwoWirePlus_txRingBuffer));
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT), TWCR);
+}
+
+/**
+ * When txRingBuffer is not empty write shall put data into txRingBuffer TWDR shall not be changed.
+ * When txRingBuffer is not empty, communication is on-going and therefore TWCR shall not be changed.
+ */
+static void TwoWirePlus_BaseTest_write_TC2(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWDR = 0xaa;
+	TWCR = 0xaa;
+	/* put one byte in buffer to make it non-empty */
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	Wire.write(0x55);
+	/* Test if TWDR was not changed */
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
+	/* Test if two bytes are buffer now. The one we added above and the one we added during write */
+	TEST_ASSERT_EQUAL_INT(0x02, TwoWirePlus_BaseTest_RingBufferBytesAvailable(TwoWirePlus_txRingBuffer));
+	/* Test if values was written to txRingBuffer */
+	TEST_ASSERT_EQUAL_INT(0x55, TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_BaseTest_previousElement(TwoWirePlus_txRingBuffer.head)]);
+	/* Test if TWCR was not changed */
+	TEST_ASSERT_EQUAL_INT(0xaa, TWCR);
+}
+
+/**
+ * When calling beginTransmission address shall be shifted by one to the left
+ * and read bit (bit 0) shall be set. After this START shall be requested in TWCR
+ * Test if address << 1 | 0x01
+ */
+static void TwoWirePlus_BaseTest_beginReception_TC1(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+
+	/* Start reading from address 0x42 four bytes */
+	Wire.beginReception(0x42);
+	/* Test if address SLA+R was written to txRingBuffer and that START was requested in TWCR */
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
+	TEST_ASSERT_EQUAL_INT(((0x42 << 1) | 0x01), TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_BaseTest_previousElement(TwoWirePlus_txRingBuffer.head)]);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_TWCR_START), TWCR);
+}
+
+/**
+ * When calling beginTransmission TWDR shall not be changed (TWDR can't be pre-loaded)
+ */
+static void TwoWirePlus_BaseTest_beginReception_TC2(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWDR = 0xaa;
+	Wire.beginReception(0x42);
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
+}
+
+/**
+ * Function requestBytes shall just increase the TwoWirePlus_bytesToReceive. More bytes than
+ * TWOWIREPLUS_RINGBUFFER_SIZE are allowed to be requested
+ */
+static void TwoWirePlus_BaseTest_requestBytes_TC1(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWDR = 0xaa;
+	TWCR = 0x55;
+	Wire.requestBytes(5);
+	TEST_ASSERT_EQUAL_INT(5, TwoWirePlus_bytesToReceive);
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
+	TEST_ASSERT_EQUAL_INT(0x55, TWCR);
+	Wire.requestBytes(TWOWIREPLUS_RINGBUFFER_SIZE);
+	TEST_ASSERT_EQUAL_INT(5 + TWOWIREPLUS_RINGBUFFER_SIZE, TwoWirePlus_bytesToReceive);
+}
+
+/**
+ * Function available shall return the number of bytes available in rxRingBuffer
+ */
+static void TwoWirePlus_BaseTest_available_TC1(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWDR = 0xaa;
+	TWCR = 0x55;
+	/* Sime test without module operation */
+	TwoWirePlus_rxRingBuffer.head = 5;
+	TEST_ASSERT_EQUAL_INT(5, Wire.available());
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
+	TEST_ASSERT_EQUAL_INT(0x55, TWCR);
+	/* Move tail to end of buffer to test module operation */
+	TwoWirePlus_rxRingBuffer.head = 0x5;
+	TwoWirePlus_rxRingBuffer.tail = TWOWIREPLUS_RINGBUFFER_SIZE - 1;
+	TEST_ASSERT_EQUAL_INT(6, Wire.available());
+}
+
+/**
+ * Function getBytesToBeReceived shall return content TwoWirePlus_bytesToReceive.
+ * Preload TwoWirePlus_bytesToReceive and check if correct value is returned
+ */
+static void TwoWirePlus_BaseTest_getBytesToBeReceived_TC1(void)
+{
+	TwoWirePlus_bytesToReceive = 0xaa;
+	TEST_ASSERT_EQUAL_INT(0xaa, Wire.getBytesToReceive());
+	TwoWirePlus_bytesToReceive = 0x55;
+	TEST_ASSERT_EQUAL_INT(0x55, Wire.getBytesToReceive());
+}
+
+/**
+ * Function getBytesToBeReceived shall return content TwoWirePlus_bytesToReceive.
+ * Preload TwoWirePlus_bytesToReceive and check if correct value is returned
+ */
+static void TwoWirePlus_BaseTest_getBytesToBeReceived_TC1(void)
+{
+	TwoWirePlus_status = 0xaa;
+	TEST_ASSERT_EQUAL_INT(0xaa, Wire.getStatus());
+	TwoWirePlus_status = 0x55;
+	TEST_ASSERT_EQUAL_INT(0x55, Wire.getStatus());
+}
+
+/**
+ * Test if TwoWirePlus_incrementIndex will increment correctly and always stays
+ * between 0 and TWOWIREPLUS_RINGBUFFER_SIZE-1
+ */
+static void TwoWirePlus_BaseTest_RingBuffer_TC1(void)
+{
+	uint8_t testVar = 0;
+	for (int i=0; i< 100; i++)
+	{
+		TEST_ASSERT(testVar >= 0);
+		TEST_ASSERT(testVar < TWOWIREPLUS_RINGBUFFER_SIZE);
+		TEST_ASSERT_EQUAL_INT((i % TWOWIREPLUS_RINGBUFFER_SIZE), testVar);
+		TwoWirePlus_incrementIndex(testVar);
+	}
+}
+
+/**
+ * Test if TwoWirePlus_RingBufferFull and TwoWirePlus_RingBufferEmpty work in various
+ * situations.
+ */
+static void TwoWirePlus_BaseTest_RingBuffer_TC2(void)
+{
+	TwoWirePlus_RingBuffer_t testBuffer;
+	testBuffer.head = 0;
+	testBuffer.tail = 0;
+	testBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(testBuffer));
+	TEST_ASSERT(!TwoWirePlus_RingBufferFull(testBuffer));
+}
+
+/**
  * Request a few bytes from two wire slave device. Make slave device
- * ACK his address and all bytes.
+ * ACK his address. This test tests a typical two wire slave device
+ * read.
  */
 static void TwoWirePlus_BaseTest_MasterReceiver_TC1(void)
 {
-	uint8_t oldNumberOfBytes = bytesToReceive;
+	TwoWirePlus_BaseTest_resetBuffer();
+
 	/* Start reading from address 0x42 four bytes */
 	Wire.beginReception(0x42);
-	Wire.requestBytes(4);
 	/* Test if address SLA+R was written to txRingBuffer and that START was requested in TWCR */
 	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
-	TEST_ASSERT_EQUAL_INT((0x42 << 1) | 0x01, TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_BaseTest_previousElement(TwoWirePlus_txRingBuffer.head)]);
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_TWCR_START, TWCR);
-	/* Preset status register to SLA ACK received and call ISR */
+	TEST_ASSERT_EQUAL_INT(((0x42 << 1) | 0x01), TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_BaseTest_previousElement(TwoWirePlus_txRingBuffer.head)]);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_TWCR_START), TWCR);
+	/* Request four bytes and see if they are requested */
+	Wire.requestBytes(4);
+	TEST_ASSERT_EQUAL_INT(0x4, TwoWirePlus_bytesToReceive);
+	/* Emulate START was generated */
+	TWSR = TW_START;
+	TWI_vect();
+	/* Check if global TwoWirePlus_status was set correctly to START */
+	TEST_ASSERT_EQUAL_INT((TW_START), TwoWirePlus_status);
+	/* Preset TwoWirePlus_status register to emulate ACK for address from two wire slave device */
 	TWSR = TW_MR_SLA_ACK;
 	TWI_vect();
-	/* Check if global status was set correctly and address was writte to tw data register */
-	TEST_ASSERT_EQUAL_INT(status, TW_MR_SLA_ACK);
-	TEST_ASSERT_EQUAL_INT(TWDR, (0x42 << 1) | 0x01);
+	/* Test if TwoWirePlus_status is set correctly and SLA+R was read from txRingBuffer and written to tw data register */
+	TEST_ASSERT_EQUAL_INT((TW_MR_SLA_ACK), TwoWirePlus_status);
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_READ, TwoWirePlus_txRingBuffer.lastOperation);
+	TEST_ASSERT_EQUAL_INT(((0x42 << 1) | 0x01), TWDR);
 	/* Test if txRingBuffer is empty now because address was sent. */
-	TEST_ASSERT_EQUAL_INT(TRUE, TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
 	/* Check if  TWIE, TWEN, TWEA and TWINT were set in ISR. */
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT, TWCR);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT), TWCR);
 	/* Now signal three bytes to be received from two wire slave device. Test if TWCR is set
 	 * correctly to make sure ACK and not NACK was sent. */
 	TWSR = TW_MR_DATA_ACK;
 	TWDR = 0xa1;
 	TWI_vect();
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT, TWCR);
+	TEST_ASSERT_EQUAL_INT((TW_MR_DATA_ACK), TwoWirePlus_status);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT), TWCR);
 	TWDR = 0xa2;
 	TWI_vect();
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT, TWCR);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT), TWCR);
 	TWDR = 0xa3;
 	TWI_vect();
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA | TWOWIREPLUS_BASETEST_TWCR_TWINT, TWCR);
+	/* For the very last by a NACK shall be sent TWEA = 0 */
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWINT), TWCR);
 	/* Signal last byte and test if NACH (TWEA not set) is returned to two wire slave device */
 	TWDR = 0xa4;
 	TWI_vect();
-	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_BASETEST_TWCR_TWIE | TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWINT, TWCR);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA ), TWCR);
 	/* Test if we really received four bytes and if the values match */
 	TEST_ASSERT_EQUAL_INT(4, Wire.available());
 	TEST_ASSERT_EQUAL_INT(0xa1, Wire.read());
@@ -120,11 +356,50 @@ static void TwoWirePlus_BaseTest_MasterReceiver_TC1(void)
 	/* Wire.endReception can't be tested. A bit is set in this function and function will wait until bit is cleared in ISR */
 }
 
+/**
+ * Request a few bytes from two wire slave device. Make slave device
+ * NACK his address. Test if TwoWirePlus_bytesToReceive is set to 0 and no bytes are
+ * received.
+ */
+static void TwoWirePlus_BaseTest_MasterReceiver_TC2(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+
+	/* Start reading from address 0x42 four bytes */
+	Wire.beginReception(0x42);
+	Wire.requestBytes(4);
+	/* Test if address SLA+R was written to txRingBuffer and that START was requested in TWCR */
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_WRITE, TwoWirePlus_txRingBuffer.lastOperation);
+	TEST_ASSERT_EQUAL_INT(((0x42 << 1) | 0x01), TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_BaseTest_previousElement(TwoWirePlus_txRingBuffer.head)]);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_TWCR_START), TWCR);
+	/* Emulate START was generated */
+	TWSR = TW_START;
+	TWI_vect();
+	/* Check if global TwoWirePlus_status was set correctly to START */
+	TEST_ASSERT_EQUAL_INT((TW_START), TwoWirePlus_status);
+	/* Preset TwoWirePlus_status register to emulate ACK for address from two wire slave device */
+	TWSR = TW_MR_SLA_NACK;
+	TWI_vect();
+	/* Test if TwoWirePlus_status is set correctly and SLA+R was read from txRingBuffer and written to tw data register */
+	TEST_ASSERT_EQUAL_INT((TW_MR_SLA_NACK), TwoWirePlus_status);
+	TEST_ASSERT_EQUAL_INT(TWOWIREPLUS_LASTOPERATION_READ, TwoWirePlus_txRingBuffer.lastOperation);
+	TEST_ASSERT_EQUAL_INT(((0x42 << 1) | 0x01), TWDR);
+	/* Test if txRingBuffer is empty now because address was sent. */
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+	/* NACK was sent for address by two wire slave device, so no data to be received */
+	TEST_ASSERT_EQUAL_INT(0x0, TwoWirePlus_bytesToReceive);
+	TEST_ASSERT_EQUAL_INT((TWOWIREPLUS_BASETEST_TWCR_TWEN | TWOWIREPLUS_BASETEST_TWCR_TWEA), TWCR);
+	/* Wire.endReception can't be tested. A bit is set in this function and function will wait until bit is cleared in ISR */
+}
+
+
 /* Test
  *  - SLA+R NACK (with and without data)
  *  - No bytes requested but bytes received
  *  - Read more bytes the requested
- *  - Check if status is set correctly for all values
+ *  - Check if TwoWirePlus_status is set correctly for all values
+ *  - Buffer only, check isEmpty, isFull function
+ *  - Read, Restart, Read
  */
 static void TwoWirePlus_BaseTest_TC1(void)
 {
@@ -154,7 +429,19 @@ TestRef TwoWirePlus_BaseTest_RunTests(void)
    EMB_UNIT_TESTFIXTURES(fixtures) {
 	new_TestFixture("Constructor: Register initialization", TwoWirePlus_BaseTest_Constructor_TC1),
 	new_TestFixture("Constructor: Ring buffer initialization", TwoWirePlus_BaseTest_Constructor_TC2),
+	new_TestFixture("beginTransmission: Check correct address is sent", TwoWirePlus_BaseTest_beginTransmission_TC1),
+	new_TestFixture("beginTransmission: No changes to TWDR", TwoWirePlus_BaseTest_beginTransmission_TC2),
+	new_TestFixture("write: Check data is written to TWDR", TwoWirePlus_BaseTest_write_TC1),
+	new_TestFixture("write: Check data is written to ring-buffer", TwoWirePlus_BaseTest_write_TC2),
+	new_TestFixture("beginReception: Check correct address is sent", TwoWirePlus_BaseTest_beginReception_TC1),
+	new_TestFixture("beginReception: No changes to TWDR", TwoWirePlus_BaseTest_beginReception_TC2),
+	new_TestFixture("requestBytes: Check TwoWirePlus_bytesToReceive", TwoWirePlus_BaseTest_requestBytes_TC1),
+	new_TestFixture("available: Check if available bytes are correct", TwoWirePlus_BaseTest_available_TC1),
+	new_TestFixture("getBytesToBeReceived: Check return value",TwoWirePlus_BaseTest_getBytesToBeReceived_TC1),
+	new_TestFixture("RingBuffer: Increment index test", TwoWirePlus_BaseTest_RingBuffer_TC1),
+	new_TestFixture("RingBuffer: Full/Empty test", TwoWirePlus_BaseTest_RingBuffer_TC2),
 	new_TestFixture("Master Receiver: ",TwoWirePlus_BaseTest_MasterReceiver_TC1),
+	new_TestFixture("Master Receiver: ",TwoWirePlus_BaseTest_MasterReceiver_TC2),
     new_TestFixture("TwoWirePlus BaseTest TC1", TwoWirePlus_BaseTest_TC1)
   };
    EMB_UNIT_TESTCALLER(TwoWirePlus_BaseTest,"TwoWirePlus_BaseTest",setUp,tearDown, fixtures);

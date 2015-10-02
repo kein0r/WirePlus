@@ -37,7 +37,6 @@ extern uint8_t TWDR;
 
 void digitalWrite(int, uint8_t);
 
-
 class Serial_t {
 
 public:
