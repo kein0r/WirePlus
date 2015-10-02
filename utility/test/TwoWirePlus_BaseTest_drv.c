@@ -294,8 +294,8 @@ static void TwoWirePlus_BaseTest_ISR_TC2(void)
 
 /**
  * In case of TW_MR_SLA_NACK, TW_MT_SLA_ACK, TW_MR_SLA_ACK, TW_MT_SLA_NACK, TW_MT_DATA_NACK
- * or TW_MT_DATA_ACK a byte was sent to two wire slave device and therefore ring buffer tail
- * must be increased accordingly.
+ * or TW_MT_DATA_ACK a byte was sent to two wire slave device earlier and therefore ring
+ * buffer tail must be increased accordingly.
  * Set above mentioned two wire status, put one byte in txRingBuffer, call ISR and test if
  * byte was consumed in ISR.
  */
@@ -308,6 +308,116 @@ static void TwoWirePlus_BaseTest_ISR_TC3(void)
 	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
 	TWI_vect();
 	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MT_SLA_ACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MR_SLA_ACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MT_SLA_NACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MT_DATA_ACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT(TwoWirePlus_RingBufferEmpty(TwoWirePlus_txRingBuffer));
+}
+
+/**
+ * In case of TW_MR_SLA_NACK, TW_MT_SLA_ACK, TW_MR_SLA_ACK, TW_MT_SLA_NACK, TW_MT_DATA_NACK,
+ * TW_MT_DATA_ACK, TW_START or TW_REP_START next data byte from txRingBuffer, if available,
+ * shall be sent and interrupt cleared (TWINT).
+ * Set above mentioned two wire status, put one byte in txRingBuffer, call ISR and test if
+ * byte was consumed in ISR. For TW_MR_SLA_NACK, TW_MT_SLA_ACK, TW_MR_SLA_ACK, TW_MT_SLA_NACK,
+ * TW_MT_DATA_NACK and TW_MT_DATA_ACK two bytes need to be put into buffer (see previous
+ * test)
+ */
+static void TwoWirePlus_BaseTest_ISR_TC4(void)
+{
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MR_SLA_NACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0x55;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MT_SLA_ACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0x55;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MR_SLA_ACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0x55;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MT_SLA_NACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0x55;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_MT_DATA_ACK;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0x55;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0x55, TWDR);
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_START;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
+
+	TwoWirePlus_BaseTest_resetBuffer();
+	TWSR = TW_REP_START;
+	TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = 0xaa;
+	TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
+	TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	TWI_vect();
+	TEST_ASSERT_EQUAL_INT(0xaa, TWDR);
 }
 
 /**
@@ -491,6 +601,7 @@ TestRef TwoWirePlus_BaseTest_RunTests(void)
 	new_TestFixture("ISR: Check if status is reported", TwoWirePlus_BaseTest_ISR_TC1),
 	new_TestFixture("ISR: Check TW_MR_SLA_NACK", TwoWirePlus_BaseTest_ISR_TC2),
 	new_TestFixture("ISR: Check TW_MR_SLA_NACK, TW_MT_SLA_ACK, TW_MR_SLA_ACK, TW_MT_SLA_NACK, TW_MT_DATA_NACK, TW_MT_DATA_ACK", TwoWirePlus_BaseTest_ISR_TC3),
+	new_TestFixture("ISR: Check data bytes are sent", TwoWirePlus_BaseTest_ISR_TC4),
 	new_TestFixture("RingBuffer: Increment index test", TwoWirePlus_BaseTest_RingBuffer_TC1),
 	new_TestFixture("RingBuffer: Full/Empty test", TwoWirePlus_BaseTest_RingBuffer_TC2),
 	new_TestFixture("Master Receiver: ",TwoWirePlus_BaseTest_MasterReceiver_TC1),
