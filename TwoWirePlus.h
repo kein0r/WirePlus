@@ -14,7 +14,7 @@
 #define TWOWIREPLUS_TWI_FREQUENCY        100000L
 #endif
 
-#define TWOWIREPLUS_RINGBUFFER_SIZE      16
+#define TWOWIREPLUS_RINGBUFFER_SIZE      (uint8_t)16
 
 #define TWOWIREPLUS_TWSR_TWPS_MASK       (_BV(TWPS1)|_BV(TWPS0))
 #define TWOWIREPLUS_TWSR_TWPS_1          0x00
@@ -99,7 +99,7 @@ public:
   void requestBytes(uint8_t numberOfBytes);
   uint8_t available();
   uint8_t read();
-  uint8_t BytesToBeReceived();
+  uint8_t getBytesToReceive();
   void endReception();
   TwoWirePlus_Status_t getStatus();
 };

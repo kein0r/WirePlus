@@ -42,12 +42,14 @@
 /*******************| Global variables |*******************************/
 static TwoWirePlus_RingBuffer_t TwoWirePlus_txRingBuffer;
 static TwoWirePlus_RingBuffer_t TwoWirePlus_rxRingBuffer;
-static TwoWirePlus_Status_t status = 0x0;
+static TwoWirePlus_Status_t TwoWirePlus_status = 0x0;
+
 /**
- * Number of bytes requested to be received via two wire interface. In case of NACK received
- * this variable will be set to 0. Thus, #status must always be checked if this variable is used.
+ * Number of bytes requested to be received via two wire interface. In case
+ * this variable hits one (1) NACK will be sent to two wire slave device for
+ * the last byte.
  */
-static volatile uint8_t bytesToReceive = 0;
+static volatile uint8_t TwoWirePlus_bytesToReceive = 0;
 
 /*******************| Function Definition |****************************/
 
@@ -95,8 +97,8 @@ TwoWirePlus::TwoWirePlus(void)
 
 /**
  * Initiates communication as I2C master
- * Adress byte will be writen to ringBuffer and (repeated) start is requested.
- * @param address 7bit slave address. Adress will autmatically be left shifted by one
+ * Address byte will be written to ringBuffer and (repeated) start is requested.
+ * @param address 7bit slave address. Address will automatically be left shifted by one
  * and write bit added.
  * @note This function is blocking! It will wait until all previous communication has
  * finished. Do not call in interrupt context.
@@ -168,7 +170,7 @@ TwoWirePlus_Status_t TwoWirePlus::endTransmission()
    */
   while(TWCR & _BV(TWSTO)) ;
 
-  return status;
+  return TwoWirePlus_status;
 }
 
 /**
@@ -207,13 +209,15 @@ void TwoWirePlus::beginReception(uint8_t address)
  * library. In contrast to the original function, this function will always sent
  * start. 
  * @note This function is blocking. Don't call in interrupt context.
+ * @return Number of bytes received
  */
 uint8_t TwoWirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
 {
   beginReception(address);
   /* bytesToReceive shall only be increased after call to beginReception to make sure all Tx is completed */
-  bytesToReceive += numberOfBytes;
+  TwoWirePlus_bytesToReceive += numberOfBytes;
   endReception();
+  return available();
 }
 
 /**
@@ -228,7 +232,7 @@ uint8_t TwoWirePlus::requestFrom(uint8_t address, uint8_t numberOfBytes)
  */
 void TwoWirePlus::requestBytes(uint8_t numberOfBytes)
 {
-  bytesToReceive += numberOfBytes;
+  TwoWirePlus_bytesToReceive += numberOfBytes;
 }
 
 /**
@@ -237,7 +241,10 @@ void TwoWirePlus::requestBytes(uint8_t numberOfBytes)
  */
 uint8_t TwoWirePlus::available()
 {
-  return (TwoWirePlus_rxRingBuffer.head - TwoWirePlus_rxRingBuffer.tail) % TWOWIREPLUS_RINGBUFFER_SIZE;
+  /* Head can be altered in ISR at any time. Therefore we create a local copy */
+  uint8_t head = TwoWirePlus_rxRingBuffer.head;
+  /* Cast to uint8_t is important here because if not compiler will chose sint8_t */
+  return (uint8_t)(head - TwoWirePlus_rxRingBuffer.tail) % TWOWIREPLUS_RINGBUFFER_SIZE;
 }
 
 /**
@@ -249,22 +256,20 @@ uint8_t TwoWirePlus::available()
  */
 uint8_t TwoWirePlus::read( )
 {
+  uint8_t retVal = 0x00;
   if(! TwoWirePlus_RingBufferEmpty(TwoWirePlus_rxRingBuffer) )
   {
-    uint8_t retVal = TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.tail];;
+    retVal = TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.tail];
     TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.tail);
-    return retVal;
   }
-  else {
-    return 0x00;
-  }
+  return retVal;
 }
 
 
 void TwoWirePlus::endReception()
 {
   /* Wait until data is completely (or NACK) received */
-  while (bytesToReceive) ;
+  while (TwoWirePlus_bytesToReceive) ;
   /* Then request STOP */
   TWCR = TWOWIREPLUS_TWCR_STOP;
   /* Problem: TWINT is not set after a stop condition. Thus, we wait for STOP bit is cleared
@@ -279,9 +284,9 @@ void TwoWirePlus::endReception()
  * @return Number of bytes still requested to be received by two wire interface or zero if NACK was
  * received from two wire slave device (status equals to TwoWirePlus_MasterReceiver_NACK).
  */
-uint8_t TwoWirePlus::BytesToBeReceived()
+uint8_t TwoWirePlus::getBytesToReceive()
 {
-  return bytesToReceive;
+  return TwoWirePlus_bytesToReceive;
 }
 
 /**
@@ -290,7 +295,7 @@ uint8_t TwoWirePlus::BytesToBeReceived()
  */
 TwoWirePlus_Status_t TwoWirePlus::getStatus()
 {
-  return status;
+  return TwoWirePlus_status;
 }
 
 /**
@@ -307,22 +312,22 @@ ISR(TWI_vect)
   digitalWrite(4, HIGH);
 #endif
   /* remember current status for application */
-  status = TW_STATUS;
+  TwoWirePlus_status = TW_STATUS;
   /* See why exactly interrupt was triggered */
   switch(TW_STATUS)
   {
     /* Slave adress is just one of the bytes which is transefered. Thus, we will just sent one
      * byte after each other after START, RE_START, ACK from the ring buffer. */
     case TW_MR_SLA_NACK:
-      /* In case we receive NACK from two wire slave device there is nothing more to receive */
-      bytesToReceive = 0;
+      /* In case we sent NACK to two wire slave device there is nothing more to receive */
+      TwoWirePlus_bytesToReceive = 0;
       /* fall through */
     case TW_MT_SLA_ACK:
     case TW_MR_SLA_ACK:
     case TW_MT_SLA_NACK:
     case TW_MT_DATA_NACK:
     case TW_MT_DATA_ACK:
-      /* If ACK was received we've sent something earlier and therefore need to move read pointer */
+      /* If ACK/NACK was received we've sent something earlier and therefore need to move read pointer */
       TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.tail);
       TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
       /* fall through */
@@ -334,9 +339,9 @@ ISR(TWI_vect)
         TWDR = TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.tail];
         TWCR = TWOWIREPLUS_TWCR_CLEAR;
       }
-      else if (bytesToReceive) /* Nothing more to send but something to receive */
+      else if (TwoWirePlus_bytesToReceive) /* Nothing more to send but something to receive */
       {
-        if (bytesToReceive == 1) /* Just one byte to receive so we need to directly send NACK */
+        if (TwoWirePlus_bytesToReceive == 1) /* Just one byte to receive so we need to directly send NACK */
         {
           TWCR = TWOWIREPLUS_TWCR_NACK;
         }
@@ -354,21 +359,21 @@ ISR(TWI_vect)
       /* No need to change bytesToReceive here because we are the one who are sending this NACK */
     case TW_MR_DATA_ACK:
       /* No check for buffer override done here because this would block the complete system */
-      if (bytesToReceive)
+      if (TwoWirePlus_bytesToReceive)
       {
         /* Place data in buffer */
         TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.head] = TWDR;
         TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.head);
         TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
-        bytesToReceive--;
+        TwoWirePlus_bytesToReceive--;
       }
       /* Is there more than one byte to be received left after this one */
-      if (bytesToReceive > 1)
+      if (TwoWirePlus_bytesToReceive > 1)
       {
         /* If yes, send ACK */
         TWCR = TWOWIREPLUS_TWCR_ACK;
       }
-      else if (bytesToReceive == 1)
+      else if (TwoWirePlus_bytesToReceive == 1)
       {
         /* Send NACK for last byte (and all following one) to stop reception */
         TWCR = TWOWIREPLUS_TWCR_NACK;
