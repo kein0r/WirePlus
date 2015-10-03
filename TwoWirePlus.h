@@ -8,13 +8,20 @@
 #include <stdint.h>
 
 /*******************| Macros |*****************************************/
-#define TWOWIREPLUS_DEBUG
+//#define TWOWIREPLUS_DEBUG
 
 #ifndef TWOWIREPLUS_TWI_FREQUENCY
 #define TWOWIREPLUS_TWI_FREQUENCY        100000L
 #endif
 
-#define TWOWIREPLUS_RINGBUFFER_SIZE      (uint8_t)16
+#ifndef TWOWIREPLUS_RINGBUFFER_SIZE
+/**
+ * Size of both rx- and txRingBuffer. Thus, twice the amount of RAM is used. Its possible
+ * to define TWOWIREPLUS_RINGBUFFER_SIZE via compiler command by using
+ * -DTWOWIREPLUS_RINGBUFFER_SIZE=32
+ */
+#define TWOWIREPLUS_RINGBUFFER_SIZE      (uint8_t)22
+#endif
 
 #define TWOWIREPLUS_TWSR_TWPS_MASK       (_BV(TWPS1)|_BV(TWPS0))
 #define TWOWIREPLUS_TWSR_TWPS_1          0x00
