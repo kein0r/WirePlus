@@ -617,19 +617,19 @@ static void TwoWirePlus_BaseTest_RingBuffer_TC2(void)
 	testBuffer.tail = 4;
 	testBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
 	TEST_ASSERT(!TwoWirePlus_RingBufferEmpty(testBuffer));
-	TEST_ASSERT(TwoWirePlus_RingBufferFull(testBuffer));
+	TEST_ASSERT(!TwoWirePlus_RingBufferFull(testBuffer));
 	testBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
 	TEST_ASSERT(!TwoWirePlus_RingBufferEmpty(testBuffer));
-	TEST_ASSERT(TwoWirePlus_RingBufferFull(testBuffer));
+	TEST_ASSERT(!TwoWirePlus_RingBufferFull(testBuffer));
 
 	testBuffer.head = 4;
 	testBuffer.tail = 8;
 	testBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
 	TEST_ASSERT(!TwoWirePlus_RingBufferEmpty(testBuffer));
-	TEST_ASSERT(TwoWirePlus_RingBufferFull(testBuffer));
+	TEST_ASSERT(!TwoWirePlus_RingBufferFull(testBuffer));
 	testBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
 	TEST_ASSERT(!TwoWirePlus_RingBufferEmpty(testBuffer));
-	TEST_ASSERT(TwoWirePlus_RingBufferFull(testBuffer));
+	TEST_ASSERT(!TwoWirePlus_RingBufferFull(testBuffer));
 }
 
 /**
