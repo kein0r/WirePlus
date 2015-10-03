@@ -50,6 +50,21 @@ void TwoWirePlus_BaseTest_resetBuffer()
 }
 
 /**
+ * Check parameters for valid values
+ */
+static void TwoWirePlus_BaseTest_Parameter_TC1(void)
+{
+	/* TWOWIREPLUS_RINGBUFFER_SIZE must always be to the power of two (Credit goes
+	 * to http://www.exploringbinary.com/ten-ways-to-check-if-an-integer-is-a-power-of-two-in-c/)*/
+	uint8_t t = TWOWIREPLUS_RINGBUFFER_SIZE;
+	while (((t % 2) == 0) && (t > 1))
+	{
+		t = t/2;
+	}
+	TEST_ASSERT(t==1);
+}
+
+/**
  * A member of TwoWirePlus named Wire is already created in TwoWirePlus.cpp.
  * Therefore we assume that the constructor is already called. Check if twi
  * register TWSR, TWBR are set-up correctly.
@@ -761,6 +776,7 @@ static void tearDown(void)
 TestRef TwoWirePlus_BaseTest_RunTests(void)
 {
    EMB_UNIT_TESTFIXTURES(fixtures) {
+	new_TestFixture("Parameter: Check TWOWIREPLUS_RINGBUFFER_SIZE", TwoWirePlus_BaseTest_Parameter_TC1),
 	new_TestFixture("Constructor: Register initialization", TwoWirePlus_BaseTest_Constructor_TC1),
 	new_TestFixture("Constructor: Ring buffer initialization", TwoWirePlus_BaseTest_Constructor_TC2),
 	new_TestFixture("beginTransmission: Check correct address is sent", TwoWirePlus_BaseTest_beginTransmission_TC1),

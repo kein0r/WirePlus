@@ -19,8 +19,10 @@
  * Size of both rx- and txRingBuffer. Thus, twice the amount of RAM is used. Its possible
  * to define TWOWIREPLUS_RINGBUFFER_SIZE via compiler command by using
  * -DTWOWIREPLUS_RINGBUFFER_SIZE=32
+ * @note: Due to the way empty available bytes are calculated, DTWOWIREPLUS_RINGBUFFER_SIZE
+ *  must be always to the power of two.
  */
-#define TWOWIREPLUS_RINGBUFFER_SIZE      (uint8_t)22
+#define TWOWIREPLUS_RINGBUFFER_SIZE      (uint8_t)32
 #endif
 
 #define TWOWIREPLUS_TWSR_TWPS_MASK       (_BV(TWPS1)|_BV(TWPS0))
