@@ -1,4 +1,4 @@
-/** @ingroup TwoWirePlus
+/** @ingroup TwoWirePlus_BasicTest
  * @{
  */
 #ifndef  TWOWIREPLUS_BASETEST_H

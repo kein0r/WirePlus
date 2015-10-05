@@ -114,8 +114,8 @@ void TwoWirePlus::beginTransmission(uint8_t address)
   /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
   /* Place data in buffer */
   TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = address;
-  TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
   TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+  TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
 
   /* Request start signal */
   TWCR = TWOWIREPLUS_TWCR_START;
@@ -146,8 +146,8 @@ void TwoWirePlus::write(const uint8_t data)
     while( TwoWirePlus_RingBufferFull(TwoWirePlus_txRingBuffer) ) ;
     /* Place data in buffer */
     TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = data;
-    TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
     TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+    TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
   }
 }
 
@@ -193,8 +193,8 @@ void TwoWirePlus::beginReception(uint8_t address)
   /* Unfortunately, we can't use write function here because TWDR register can't be pre-loaded */  
   /* Place data in buffer */
   TwoWirePlus_txRingBuffer.buffer[TwoWirePlus_txRingBuffer.head] = address;
-  TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
   TwoWirePlus_txRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+  TwoWirePlus_incrementIndex(TwoWirePlus_txRingBuffer.head);
 
   /* Request start signal */
   TWCR = TWOWIREPLUS_TWCR_START;
@@ -242,7 +242,7 @@ void TwoWirePlus::requestBytes(uint8_t numberOfBytes)
 uint8_t TwoWirePlus::available()
 {
   /* Head can be altered in ISR at any time. Therefore we create a local copy */
-  uint8_t head = TwoWirePlus_rxRingBuffer.head;
+  volatile uint8_t head = TwoWirePlus_rxRingBuffer.head;
   /* Cast to uint8_t is important here because if not compiler will chose sint8_t */
   return (uint8_t)(head - TwoWirePlus_rxRingBuffer.tail) % TWOWIREPLUS_RINGBUFFER_SIZE;
 }
@@ -260,6 +260,7 @@ uint8_t TwoWirePlus::read( )
   if(! TwoWirePlus_RingBufferEmpty(TwoWirePlus_rxRingBuffer) )
   {
     retVal = TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.tail];
+    TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_READ;
     TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.tail);
   }
   return retVal;

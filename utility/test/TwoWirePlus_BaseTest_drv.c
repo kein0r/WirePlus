@@ -1,11 +1,11 @@
-/** \brief TwoWirePlus Basic Test
+/** @ingroup TwoWirePlus_BasicTest
+ * @{
+ * \brief TwoWirePlus Basic Test
  *
  * This file contains the implementation of the
  * module test for TwoWirePlus library
  *
  */
-
-
 /*******************| Inclusions |*************************************/
 #include <stdint.h>
 #include <stdbool.h>
@@ -231,6 +231,85 @@ static void TwoWirePlus_BaseTest_requestBytes_TC1(void)
 	TEST_ASSERT_EQUAL_INT(0x55, TWCR);
 	Wire.requestBytes(TWOWIREPLUS_RINGBUFFER_SIZE);
 	TEST_ASSERT_EQUAL_INT(5 + TWOWIREPLUS_RINGBUFFER_SIZE, TwoWirePlus_bytesToReceive);
+}
+
+/**
+ * Function shall return one byte from TwoWirePlus_rxRingBuffer, if available, if not
+ * 0x00 shall be returned.
+ * Test if 10 bytes of data can be successfully read from buffer if buffer was empty before.
+ */
+static void TwoWirePlus_BaseTest_read_TC1(void)
+{
+	int i;
+	TwoWirePlus_BaseTest_resetBuffer();
+	/* Fill buffer with some data */
+	for (i=0; i<10; i++)
+	{
+		TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.head] = i;
+		TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.head);
+		TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	}
+	/* Read data and check result */
+	for (i=0; i<10; i++)
+	{
+		TEST_ASSERT_EQUAL_INT(i, Wire.read());
+	}
+}
+
+/**
+ * Function shall return one byte from TwoWirePlus_rxRingBuffer, if available, if not
+ * 0x00 shall be returned.
+ * Test if 10 bytes of data can be successfully read from buffer if buffer is empty but was
+ * already used before. Thus, test ring-buffer overrun.
+ */
+static void TwoWirePlus_BaseTest_read_TC2(void)
+{
+	int i;
+	TwoWirePlus_BaseTest_resetBuffer();
+	/* Set buffer pointer next to full */
+	TwoWirePlus_rxRingBuffer.head = TWOWIREPLUS_RINGBUFFER_SIZE - 2;
+	TwoWirePlus_rxRingBuffer.tail = TWOWIREPLUS_RINGBUFFER_SIZE - 2;
+	/* Fill buffer with some data */
+	for (i=0; i<10; i++)
+	{
+		TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.head] = i;
+		TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.head);
+		TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	}
+	/* Read data and check result */
+	for (i=0; i<10; i++)
+	{
+		TEST_ASSERT_EQUAL_INT(i, Wire.read());
+	}
+}
+
+/**
+ * Function shall return one byte from TwoWirePlus_rxRingBuffer, if available, if not
+ * 0x00 shall be returned.
+ * Write 5 bytes to buffer but try to read 10. Test if first 5 bytes contain valid data
+ * and remaining reads all return 0x00.
+ */
+static void TwoWirePlus_BaseTest_read_TC3(void)
+{
+	int i;
+	TwoWirePlus_BaseTest_resetBuffer();
+	/* Fill buffer with some data */
+	for (i=0; i<5; i++)
+	{
+		TwoWirePlus_rxRingBuffer.buffer[TwoWirePlus_rxRingBuffer.head] = i;
+		TwoWirePlus_incrementIndex(TwoWirePlus_rxRingBuffer.head);
+		TwoWirePlus_rxRingBuffer.lastOperation = TWOWIREPLUS_LASTOPERATION_WRITE;
+	}
+	/* Read data and check result */
+	for (i=0; i<5; i++)
+	{
+		TEST_ASSERT_EQUAL_INT(i, Wire.read());
+	}
+	/* Read more data and check if return value is 0x00 */
+	for (i=0; i<40; i++)
+	{
+		TEST_ASSERT_EQUAL_INT(0x00, Wire.read());
+	}
 }
 
 /**
@@ -787,6 +866,9 @@ TestRef TwoWirePlus_BaseTest_RunTests(void)
 	new_TestFixture("beginReception: No changes to TWDR", TwoWirePlus_BaseTest_beginReception_TC2),
 	new_TestFixture("requestBytes: Check TwoWirePlus_bytesToReceive", TwoWirePlus_BaseTest_requestBytes_TC1),
 	new_TestFixture("available: Check if available bytes are correct", TwoWirePlus_BaseTest_available_TC1),
+	new_TestFixture("read: Check normal buffer read", TwoWirePlus_BaseTest_read_TC1),
+	new_TestFixture("read: Check buffer read when buffer was used", TwoWirePlus_BaseTest_read_TC2),
+	new_TestFixture("read: Check return value if more bytes read than available in buffer", TwoWirePlus_BaseTest_read_TC3),
 	new_TestFixture("getBytesToBeReceived: Check return value",TwoWirePlus_BaseTest_getBytesToBeReceived_TC1),
 	new_TestFixture("getStatus: Check return value", TwoWirePlus_BaseTest_getStatus_TC1),
 	new_TestFixture("ISR: Check if status is reported", TwoWirePlus_BaseTest_ISR_TC1),
@@ -814,3 +896,4 @@ int main(void)
 }
 
 /*******************| Preinstantiate Objects |*************************/
+/** @} */
